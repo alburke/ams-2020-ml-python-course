@@ -14,9 +14,9 @@ import sklearn.metrics
 import sklearn.linear_model
 import sklearn.tree
 import sklearn.ensemble
-from module_4 import roc_curves
-from module_4 import performance_diagrams as perf_diagrams
-from module_4 import attributes_diagrams as attr_diagrams
+#from module_4 import roc_curves
+#from module_4 import performance_diagrams as perf_diagrams
+#from module_4 import attributes_diagrams as attr_diagrams
 
 # Directories.
 MODULE2_DIR_NAME = '.'
