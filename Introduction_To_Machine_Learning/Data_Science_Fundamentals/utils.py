@@ -14,16 +14,19 @@ import sklearn.metrics
 import sklearn.linear_model
 import sklearn.tree
 import sklearn.ensemble
-#from module_4 import roc_curves
-#from module_4 import performance_diagrams as perf_diagrams
-#from module_4 import attributes_diagrams as attr_diagrams
+
+import sys
+from os.path import dirname, abspath
+sys.path.insert(1, abspath('')+"/introduction_to_machine_learning")
+
+import introduction_to_machine_learning.data_science_fundamentals.roc_curves as roc_curves
+import introduction_to_machine_learning.data_science_fundamentals.performance_diagrams as perf_diagrams
+import introduction_to_machine_learning.data_science_fundamentals.attributes_diagrams as attr_diagrams
 
 # Directories.
 MODULE2_DIR_NAME = '.'
 SHORT_COURSE_DIR_NAME = '..'
-DEFAULT_FEATURE_DIR_NAME = (
-    '{0:s}/data/track_data_ncar_ams_3km_csv_small'
-).format(SHORT_COURSE_DIR_NAME)
+DEFAULT_FEATURE_DIR_NAME = sys.path.insert(1, abspath('')+'/data/track_data_ncar_ams_3km_csv_small')
 
 # Variable names.
 METADATA_COLUMNS = [
@@ -154,6 +157,7 @@ def find_many_feature_files(first_date_string, last_date_string,
     :return: csv_file_names: 1-D list of paths to feature files.
     """
 
+    print(feature_dir_name)
     first_time_unix_sec = time_string_to_unix(
         time_string=first_date_string, time_format=DATE_FORMAT)
     last_time_unix_sec = time_string_to_unix(
@@ -218,6 +222,8 @@ def read_many_feature_files(csv_file_names):
     list_of_predictor_tables = [pandas.DataFrame()] * num_files
     list_of_target_tables = [pandas.DataFrame()] * num_files
 
+    print(csv_file_names)
+
     for i in range(num_files):
         print('Reading data from: "{0:s}"...'.format(csv_file_names[i]))
 
@@ -231,6 +237,8 @@ def read_many_feature_files(csv_file_names):
         list_of_metadata_tables[i] = list_of_metadata_tables[i].align(
             list_of_metadata_tables[0], axis=1
         )[0]
+
+        print(list_of_metadata_tables)
 
         list_of_predictor_tables[i] = list_of_predictor_tables[i].align(
             list_of_predictor_tables[0], axis=1
