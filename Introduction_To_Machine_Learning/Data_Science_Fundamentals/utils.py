@@ -24,9 +24,11 @@ import introduction_to_machine_learning.data_science_fundamentals.performance_di
 import introduction_to_machine_learning.data_science_fundamentals.attributes_diagrams as attr_diagrams
 
 # Directories.
-MODULE2_DIR_NAME = '.'
-SHORT_COURSE_DIR_NAME = '..'
-DEFAULT_FEATURE_DIR_NAME = sys.path.insert(1, abspath('')+'/data/track_data_ncar_ams_3km_csv_small')
+MODULE2_DIR_NAME = dirname(abspath(__file__))
+SHORT_COURSE_DIR_NAME = dirname(dirname(dirname(abspath(__file__))))
+DEFAULT_FEATURE_DIR_NAME = (
+    '{0:s}/data/track_data_ncar_ams_3km_csv_small'
+).format(SHORT_COURSE_DIR_NAME)
 
 # Variable names.
 METADATA_COLUMNS = [
@@ -156,8 +158,7 @@ def find_many_feature_files(first_date_string, last_date_string,
     :param feature_dir_name: Name of directory with feature (CSV) files.
     :return: csv_file_names: 1-D list of paths to feature files.
     """
-
-    print(feature_dir_name)
+    
     first_time_unix_sec = time_string_to_unix(
         time_string=first_date_string, time_format=DATE_FORMAT)
     last_time_unix_sec = time_string_to_unix(
