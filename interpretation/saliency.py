@@ -4,7 +4,7 @@ import numpy
 from keras import backend as K
 from interpretation import utils
 
-DEFAULT_SALIENCY_LINE_WIDTH = 2
+DEFAULT_LINE_WIDTH = 2.
 
 
 def _do_saliency_calculations(
@@ -82,10 +82,10 @@ def _get_grid_points(x_min, x_spacing, num_columns, y_min, y_spacing, num_rows):
     return x_coords, y_coords
 
 
-def _plot_one_saliency_map(
+def _plot_2d_saliency_map(
         saliency_matrix_2d, axes_object, colour_map_object, max_contour_value,
-        contour_interval, line_width=DEFAULT_SALIENCY_LINE_WIDTH):
-    """Plots one saliency map with line contours.
+        contour_interval, line_width=DEFAULT_LINE_WIDTH):
+    """Plots 2-D saliency map with line contours.
 
     M = number of rows in grid
     N = number of columns in grid
@@ -226,7 +226,7 @@ def smooth_saliency_maps(saliency_matrices, smoothing_radius_grid_cells):
 def plot_saliency_maps(
         saliency_matrix_3d, axes_object_matrix, colour_map_object,
         max_contour_value, contour_interval,
-        line_width=DEFAULT_SALIENCY_LINE_WIDTH):
+        line_width=DEFAULT_LINE_WIDTH):
     """Plots many saliency maps (one for each channel).
 
     M = number of rows in grid
@@ -236,7 +236,7 @@ def plot_saliency_maps(
     :param saliency_matrix_3d: M-by-N-by-C numpy array of saliency values.
     :param axes_object_matrix: 2-D numpy array of axes (each an instance of
         `matplotlib.axes._subplots.AxesSubplot`).
-    :param colour_map_object: See doc for `_plot_one_saliency_map`.
+    :param colour_map_object: See doc for `_plot_2d_saliency_map`.
     :param max_contour_value: Same.
     :param contour_interval: Same.
     :param line_width: Same.
@@ -252,7 +252,7 @@ def plot_saliency_maps(
         i, j = numpy.unravel_index(k, (num_panel_rows, num_panel_columns))
         this_axes_object = axes_object_matrix[i, j]
 
-        _plot_one_saliency_map(
+        _plot_2d_saliency_map(
             saliency_matrix_2d=saliency_matrix_3d[..., k],
             axes_object=this_axes_object,
             colour_map_object=colour_map_object,
