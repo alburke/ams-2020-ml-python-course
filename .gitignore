@@ -11,3 +11,7 @@ dist/
 # IntelliJ things.
 .idea/
 *.iml
+
+# Other garbage.
+Advanced_Topics_In_Machine_Learning/.ipynb_checkpoints/
+data/

@@ -259,3 +259,12 @@ def plot_saliency_maps(
             max_contour_value=max_contour_value,
             contour_interval=contour_interval, line_width=line_width
         )
+
+    # colour_bar_object = utils.plot_linear_colour_bar(
+    #     axes_object_or_matrix=axes_object_matrix,
+    #     data_values=saliency_matrix_3d, colour_map_object=colour_map_object,
+    #     min_value=0., max_value=max_contour_value, plot_horizontal=False,
+    #     plot_min_arrow=False, plot_max_arrow=True, fraction_of_axis_length=0.9
+    # )
+    #
+    # colour_bar_object.set_label('Absolute saliency')

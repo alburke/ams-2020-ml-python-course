@@ -314,8 +314,6 @@ def plot_2d_cam(
     :param line_width: Same.
     """
 
-    assert len(class_activation_matrix_2d.shape) == 3
-
     num_panel_rows = axes_object_matrix.shape[0]
     num_panel_columns = axes_object_matrix.shape[1]
 
