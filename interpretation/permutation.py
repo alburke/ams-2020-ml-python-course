@@ -1,11 +1,38 @@
 """Helper methods for the permutation importance test."""
 
 import numpy
+from matplotlib import pyplot
 from sklearn.metrics import roc_auc_score as sklearn_auc
 
 SEPARATOR_STRING = '\n\n' + '*' * 50 + '\n\n'
 
 DEFAULT_NUM_BOOTSTRAP_REPS = 1000
+DEFAULT_CONFIDENCE_LEVEL = 0.95
+
+DEFAULT_BAR_COLOUR = numpy.array([252, 141, 98], dtype=float) / 255
+NO_PERMUTATION_COLOUR = numpy.full(3, 1.)
+BAR_EDGE_COLOUR = numpy.full(3, 0.)
+ERROR_BAR_COLOUR = numpy.full(3, 0.)
+REFERENCE_LINE_COLOUR = numpy.full(3, 152. / 255)
+
+BAR_EDGE_WIDTH = 2
+REFERENCE_LINE_WIDTH = 4
+ERROR_BAR_CAP_SIZE = 8
+ERROR_BAR_DICT = {'alpha': 0.5, 'linewidth': 4, 'capthick': 4}
+
+BAR_TEXT_COLOUR = numpy.full(3, 0.)
+BAR_FONT_SIZE = 17.5
+DEFAULT_FONT_SIZE = 22.5
+FIGURE_WIDTH_INCHES = 10
+FIGURE_HEIGHT_INCHES = 10
+
+pyplot.rc('font', size=DEFAULT_FONT_SIZE)
+pyplot.rc('axes', titlesize=DEFAULT_FONT_SIZE)
+pyplot.rc('axes', labelsize=DEFAULT_FONT_SIZE)
+pyplot.rc('xtick', labelsize=DEFAULT_FONT_SIZE)
+pyplot.rc('ytick', labelsize=DEFAULT_FONT_SIZE)
+pyplot.rc('legend', fontsize=DEFAULT_FONT_SIZE)
+pyplot.rc('figure', titlesize=DEFAULT_FONT_SIZE)
 
 PREDICTOR_MATRIX_KEY = 'predictor_matrix'
 PERMUTED_FLAGS_KEY = 'permuted_channel_flags'
@@ -372,35 +399,6 @@ def _run_backwards_test_one_step(
     }
 
 
-def negative_auc_function(target_values, class_probability_matrix):
-    """Computes negative AUC (area under the ROC curve).
-
-    This function works only for binary classification!
-
-    :param target_values: length-E numpy array of target values (integers in
-        0...1).
-    :param class_probability_matrix: E-by-2 numpy array of predicted
-        probabilities.
-    :return: negative_auc: Negative AUC.
-    :raises: TypeError: if `class_probability_matrix` contains more than 2
-        classes.
-    """
-
-    num_classes = class_probability_matrix.shape[-1]
-
-    if num_classes != 2:
-        error_string = (
-            'This function works only for binary classification, not '
-            '{0:d}-class classification.'
-        ).format(num_classes)
-
-        raise TypeError(error_string)
-
-    return -1 * sklearn_auc(
-        y_true=target_values, y_score=class_probability_matrix[:, -1]
-    )
-
-
 def _check_input_args(clean_predictor_matrix, target_values, predictor_names,
                       num_bootstrap_reps):
     """Error-checks input args for forward or backwards permutation test.
@@ -439,6 +437,35 @@ def _check_input_args(clean_predictor_matrix, target_values, predictor_names,
     assert num_bootstrap_reps >= 1
 
     return num_bootstrap_reps
+
+
+def negative_auc_function(target_values, class_probability_matrix):
+    """Computes negative AUC (area under the ROC curve).
+
+    This function works only for binary classification!
+
+    :param target_values: length-E numpy array of target values (integers in
+        0...1).
+    :param class_probability_matrix: E-by-2 numpy array of predicted
+        probabilities.
+    :return: negative_auc: Negative AUC.
+    :raises: TypeError: if `class_probability_matrix` contains more than 2
+        classes.
+    """
+
+    num_classes = class_probability_matrix.shape[-1]
+
+    if num_classes != 2:
+        error_string = (
+            'This function works only for binary classification, not '
+            '{0:d}-class classification.'
+        ).format(num_classes)
+
+        raise TypeError(error_string)
+
+    return -1 * sklearn_auc(
+        y_true=target_values, y_score=class_probability_matrix[:, -1]
+    )
 
 
 def run_forward_test(
@@ -648,3 +675,280 @@ def run_backwards_test(
         STEP1_COST_MATRIX_KEY: step1_cost_matrix,
         BACKWARDS_FLAG: True
     }
+
+
+def _get_limits_for_error_bar(cost_matrix, confidence_level):
+    """Returns limits for error bar.
+
+    S = number of steps in permutation test
+    B = number of bootstrap replicates
+
+    :param cost_matrix: S-by-B numpy array of costs.
+    :param confidence_level: Confidence level for error bar (in range 0...1).
+    :return: error_matrix: 2-by-S numpy array, where the first row contains
+        negative errors and second row contains positive errors.
+    """
+
+    assert confidence_level >= 0.9
+    assert confidence_level < 1.
+
+    mean_costs = numpy.mean(cost_matrix, axis=-1)
+    min_costs = numpy.percentile(
+        cost_matrix, 50 * (1. - confidence_level), axis=-1
+    )
+    max_costs = numpy.percentile(
+        cost_matrix, 50 * (1. + confidence_level), axis=-1
+    )
+
+    negative_errors = mean_costs - min_costs
+    positive_errors = max_costs - mean_costs
+
+    negative_errors = numpy.reshape(negative_errors, (1, negative_errors.size))
+    positive_errors = numpy.reshape(positive_errors, (1, positive_errors.size))
+    return numpy.vstack((negative_errors, positive_errors))
+
+
+def _label_bar_graph(axes_object, label_strings, y_coords):
+    """Labels bar graph with results of permutation test.
+
+    B = number of bars
+
+    :param axes_object: Will plot on these axes (instance of
+        `matplotlib.axes._subplots.AxesSubplot`).
+    :param label_strings: length-B list of labels (strings).
+    :param y_coords: length-B numpy array with y-coordinate of each bar.
+    """
+
+    x_limits = axes_object.get_xlim()
+    x_min = x_limits[0]
+    x_max = x_limits[1]
+    x_coord_for_text = x_min + 0.025 * (x_max - x_min)
+
+    num_predictors = len(label_strings)
+
+    for k in range(num_predictors):
+        axes_object.text(
+            x_coord_for_text, y_coords[k], '   ' + label_strings[k],
+            color=BAR_TEXT_COLOUR, horizontalalignment='left',
+            verticalalignment='center', fontsize=BAR_FONT_SIZE
+        )
+
+
+def _plot_bar_graph(
+        cost_matrix, predictor_names, clean_cost_array,
+        backwards_flag, multipass_flag, confidence_level, axes_object):
+    """Plots bar graph with results of permutation test.
+
+    C = number of channels (predictors)
+    B = number of bootstrap replicates
+
+    :param cost_matrix: (C + 1)-by-B numpy array of costs.  The first row
+        contains costs at the beginning of the test -- i.e., before
+        (un)permuting any predictors.
+    :param predictor_names: length-C list of predictor names (strings).
+    :param clean_cost_array: length-B numpy array of costs with clean predictors
+        (no permutation).
+    :param backwards_flag: Boolean flag.  If True, plotting results for the
+        backwards test.  If False, for the forward test.
+    :param multipass_flag: Boolean flag.  If True, plotting results for the
+        multi-pass test.  If False, for the single-pass test.
+    :param confidence_level: Confidence level for error bars.
+    :param axes_object: Will plot on these axes (instance of
+        `matplotlib.axes._subplots.AxesSubplot`).
+    """
+
+    mean_clean_cost = numpy.mean(clean_cost_array)
+
+    if numpy.any(cost_matrix < 0):
+        cost_matrix *= -1
+        mean_clean_cost *= -1
+        x_axis_label = 'Area under ROC curve (AUC)'
+    else:
+        x_axis_label = 'Cost'
+
+    if backwards_flag:
+        bar_labels = ['All permuted'] + predictor_names
+    else:
+        bar_labels = ['None permuted'] + predictor_names
+
+    bar_y_coords = numpy.linspace(
+        0, len(bar_labels) - 1, num=len(bar_labels), dtype=float
+    )
+
+    if multipass_flag:
+        bar_y_coords = bar_y_coords[::-1]
+
+    if axes_object is None:
+        _, axes_object = pyplot.subplots(
+            1, 1, figsize=(FIGURE_WIDTH_INCHES, FIGURE_HEIGHT_INCHES)
+        )
+
+    bar_face_colours = [DEFAULT_BAR_COLOUR] * len(predictor_names)
+    bar_face_colours.insert(0, NO_PERMUTATION_COLOUR)
+
+    mean_costs = numpy.mean(cost_matrix, axis=-1)
+    num_bootstrap_reps = cost_matrix.shape[1]
+
+    if num_bootstrap_reps > 1:
+        error_matrix = _get_limits_for_error_bar(
+            cost_matrix=cost_matrix, confidence_level=confidence_level
+        )
+
+        axes_object.barh(
+            bar_y_coords, mean_costs, color=bar_face_colours,
+            edgecolor=BAR_EDGE_COLOUR, linewidth=BAR_EDGE_WIDTH,
+            xerr=error_matrix, ecolor=ERROR_BAR_COLOUR,
+            capsize=ERROR_BAR_CAP_SIZE, error_kw=ERROR_BAR_DICT
+        )
+    else:
+        axes_object.barh(
+            bar_y_coords, mean_costs, color=bar_face_colours,
+            edgecolor=BAR_EDGE_COLOUR, linewidth=BAR_EDGE_WIDTH
+        )
+
+    reference_x_coords = numpy.full(2, mean_clean_cost)
+    reference_y_coords = numpy.array([
+        numpy.min(bar_y_coords) - 0.75,
+        numpy.max(bar_y_coords) + 0.75
+    ])
+
+    axes_object.plot(
+        reference_x_coords, reference_y_coords, color=REFERENCE_LINE_COLOUR,
+        linestyle='--', linewidth=REFERENCE_LINE_WIDTH
+    )
+
+    axes_object.set_yticks([], [])
+    axes_object.set_xlabel(x_axis_label)
+
+    if backwards_flag:
+        axes_object.set_ylabel('Variable unpermuted')
+    else:
+        axes_object.set_ylabel('Variable permuted')
+
+    _label_bar_graph(
+        axes_object=axes_object, label_strings=bar_labels, y_coords=bar_y_coords
+    )
+    axes_object.set_ylim(
+        numpy.min(bar_y_coords) - 0.75, numpy.max(bar_y_coords) + 0.75
+    )
+
+
+def plot_single_pass_test(
+        result_dict, axes_object=None, num_predictors_to_plot=None,
+        confidence_level=DEFAULT_CONFIDENCE_LEVEL):
+    """Plots single-pass version of forward or backwards permutation test.
+
+    :param result_dict: Dictionary created by `run_forward_test` or
+        `run_backwards_test`.
+    :param axes_object: Will plot on these axes (instance of
+        `matplotlib.axes._subplots.AxesSubplot`).  If None, will create new
+        axes.
+    :param num_predictors_to_plot: Will plot only the K most important
+        predictors, where K = `num_predictors_to_plot`.  If you want to plot all
+        predictors, leave this alone.
+    :param confidence_level: Confidence level for error bars (in range 0...1).
+    """
+
+    # Check input args.
+    predictor_names = result_dict[STEP1_PREDICTORS_KEY]
+
+    if num_predictors_to_plot is None:
+        num_predictors_to_plot = len(predictor_names)
+
+    num_predictors_to_plot = min([
+        num_predictors_to_plot, len(predictor_names)
+    ])
+
+    num_predictors_to_plot = int(numpy.round(num_predictors_to_plot))
+    assert num_predictors_to_plot > 0
+
+    # Set up arguments for `_plot_bar_graph`.
+    backwards_flag = result_dict[BACKWARDS_FLAG]
+    perturbed_cost_matrix = result_dict[STEP1_COST_MATRIX_KEY]
+    mean_perturbed_costs = numpy.mean(perturbed_cost_matrix, axis=-1)
+
+    if backwards_flag:
+        sort_indices = numpy.argsort(
+            mean_perturbed_costs
+        )[:num_predictors_to_plot][::-1]
+    else:
+        sort_indices = numpy.argsort(
+            mean_perturbed_costs
+        )[-num_predictors_to_plot:]
+
+    perturbed_cost_matrix = perturbed_cost_matrix[sort_indices, :]
+    predictor_names = [predictor_names[k] for k in sort_indices]
+
+    original_cost_array = result_dict[ORIGINAL_COST_ARRAY_KEY]
+    original_cost_matrix = numpy.reshape(
+        original_cost_array, (1, original_cost_array.size)
+    )
+    cost_matrix = numpy.concatenate(
+        (original_cost_matrix, perturbed_cost_matrix), axis=0
+    )
+
+    # Plot.
+    if backwards_flag:
+        clean_cost_array = result_dict[BEST_COST_MATRIX_KEY][-1, :]
+    else:
+        clean_cost_array = original_cost_array
+
+    _plot_bar_graph(
+        cost_matrix=cost_matrix, predictor_names=predictor_names,
+        clean_cost_array=clean_cost_array,
+        backwards_flag=backwards_flag, multipass_flag=False,
+        confidence_level=confidence_level, axes_object=axes_object
+    )
+
+
+def plot_multipass_test(
+        result_dict, axes_object=None, num_predictors_to_plot=None,
+        confidence_level=DEFAULT_CONFIDENCE_LEVEL):
+    """Plots multi-pass version of forward or backwards permutation test.
+
+    :param result_dict: See doc for `plot_single_pass_test`.
+    :param axes_object: Same.
+    :param num_predictors_to_plot: Same.
+    :param confidence_level: Same.
+    """
+
+    # Check input args.
+    predictor_names = result_dict[BEST_PREDICTORS_KEY]
+
+    if num_predictors_to_plot is None:
+        num_predictors_to_plot = len(predictor_names)
+
+    num_predictors_to_plot = min([
+        num_predictors_to_plot, len(predictor_names)
+    ])
+
+    num_predictors_to_plot = int(numpy.round(num_predictors_to_plot))
+    assert num_predictors_to_plot > 0
+
+    # Set up arguments for `_plot_bar_graph`.
+    backwards_flag = result_dict[BACKWARDS_FLAG]
+    perturbed_cost_matrix = result_dict[BEST_COST_MATRIX_KEY]
+
+    perturbed_cost_matrix = perturbed_cost_matrix[:num_predictors_to_plot, :]
+    predictor_names = predictor_names[:num_predictors_to_plot]
+
+    original_cost_array = result_dict[ORIGINAL_COST_ARRAY_KEY]
+    original_cost_matrix = numpy.reshape(
+        original_cost_array, (1, original_cost_array.size)
+    )
+    cost_matrix = numpy.concatenate(
+        (original_cost_matrix, perturbed_cost_matrix), axis=0
+    )
+
+    # Plot.
+    if backwards_flag:
+        clean_cost_array = result_dict[BEST_COST_MATRIX_KEY][-1, :]
+    else:
+        clean_cost_array = original_cost_array
+
+    _plot_bar_graph(
+        cost_matrix=cost_matrix, predictor_names=predictor_names,
+        clean_cost_array=clean_cost_array,
+        backwards_flag=backwards_flag, multipass_flag=True,
+        confidence_level=confidence_level, axes_object=axes_object
+    )
