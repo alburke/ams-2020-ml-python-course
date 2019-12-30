@@ -2,6 +2,7 @@
 
 import copy
 import glob
+import errno
 import time
 import calendar
 import os.path
@@ -59,6 +60,32 @@ def _image_file_name_to_date(netcdf_file_name):
     # Verify.
     time_string_to_unix(time_string=date_string, time_format=DATE_FORMAT)
     return date_string
+
+
+def create_directory(directory_name=None, file_name=None):
+    """Creates directory if necessary (i.e., doesn't already exist).
+
+    This method checks for the argument `directory_name` first.  If
+    `directory_name` is None, this method checks for `file_name` and extracts
+    the directory.
+
+    :param directory_name: Path to local directory.
+    :param file_name: Path to local file.
+    """
+
+    if directory_name is None:
+        directory_name = os.path.dirname(file_name)
+
+    if directory_name == '':
+        return
+
+    try:
+        os.makedirs(directory_name)
+    except OSError as this_error:
+        if this_error.errno == errno.EEXIST and os.path.isdir(directory_name):
+            pass
+        else:
+            raise
 
 
 def apply_gaussian_filter(input_matrix, e_folding_radius_grid_cells):

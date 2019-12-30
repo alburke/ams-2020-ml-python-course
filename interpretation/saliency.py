@@ -103,10 +103,10 @@ def _plot_2d_saliency_map(
 
     # Check input args.
     assert max_contour_value >= 0.
-    max_contour_value = max([max_contour_value, 1e-3])
+    max_contour_value = max([max_contour_value, 1e-6])
 
     assert contour_interval >= 0.
-    contour_interval = max([contour_interval, 1e-4])
+    contour_interval = max([contour_interval, 1e-7])
 
     assert not numpy.any(numpy.isnan(saliency_matrix_2d))
     assert len(saliency_matrix_2d.shape) == 2
@@ -168,6 +168,8 @@ def get_saliency_maps_for_class(
     :param list_of_input_matrices: See doc for `_do_saliency_calculations`.
     :return: list_of_saliency_matrices: See doc for `_do_saliency_calculations`.
     """
+
+    # TODO(thunderhoser): Create example axis.
 
     target_class = int(numpy.round(target_class))
     assert target_class >= 0

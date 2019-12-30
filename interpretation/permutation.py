@@ -328,7 +328,7 @@ def _run_backwards_test_one_step(
     """
 
     best_predictor_index = -1
-    best_cost_array = numpy.full(num_bootstrap_reps, -numpy.inf)
+    best_cost_array = numpy.full(num_bootstrap_reps, numpy.inf)
 
     unpermuted_predictor_names = []
     unpermuted_cost_matrix = numpy.full((0, num_bootstrap_reps), numpy.nan)
@@ -506,7 +506,7 @@ def run_forward_test(
         num_bootstrap_reps=num_bootstrap_reps)
 
     num_examples = clean_predictor_matrix.shape[0]
-    num_channels = clean_predictor_matrix.shape[1]
+    num_channels = clean_predictor_matrix.shape[-1]
 
     # Find original cost (before permutation).
     these_probs = model_object.predict(
@@ -606,7 +606,7 @@ def run_backwards_test(
         num_bootstrap_reps=num_bootstrap_reps)
 
     num_examples = clean_predictor_matrix.shape[0]
-    num_channels = clean_predictor_matrix.shape[1]
+    num_channels = clean_predictor_matrix.shape[-1]
 
     # Permute all predictors.
     predictor_matrix = clean_predictor_matrix + 0.
@@ -755,6 +755,7 @@ def _plot_bar_graph(
     :param confidence_level: Confidence level for error bars.
     :param axes_object: Will plot on these axes (instance of
         `matplotlib.axes._subplots.AxesSubplot`).
+    :return: axes_object: See input doc.
     """
 
     mean_clean_cost = numpy.mean(clean_cost_array)
@@ -832,6 +833,8 @@ def _plot_bar_graph(
         numpy.min(bar_y_coords) - 0.75, numpy.max(bar_y_coords) + 0.75
     )
 
+    return axes_object
+
 
 def plot_single_pass_test(
         result_dict, axes_object=None, num_predictors_to_plot=None,
@@ -847,6 +850,7 @@ def plot_single_pass_test(
         predictors, where K = `num_predictors_to_plot`.  If you want to plot all
         predictors, leave this alone.
     :param confidence_level: Confidence level for error bars (in range 0...1).
+    :return: axes_object: See input doc.
     """
 
     # Check input args.
@@ -893,7 +897,7 @@ def plot_single_pass_test(
     else:
         clean_cost_array = original_cost_array
 
-    _plot_bar_graph(
+    return _plot_bar_graph(
         cost_matrix=cost_matrix, predictor_names=predictor_names,
         clean_cost_array=clean_cost_array,
         backwards_flag=backwards_flag, multipass_flag=False,
@@ -910,6 +914,7 @@ def plot_multipass_test(
     :param axes_object: Same.
     :param num_predictors_to_plot: Same.
     :param confidence_level: Same.
+    :return: axes_object: Same.
     """
 
     # Check input args.
@@ -946,7 +951,7 @@ def plot_multipass_test(
     else:
         clean_cost_array = original_cost_array
 
-    _plot_bar_graph(
+    return _plot_bar_graph(
         cost_matrix=cost_matrix, predictor_names=predictor_names,
         clean_cost_array=clean_cost_array,
         backwards_flag=backwards_flag, multipass_flag=True,

@@ -39,7 +39,7 @@ def _optimize_input_one_example(
             input_tensor[0, ...] - optimized_input_matrix[0, ...]
         )
 
-        loss_tensor += l2_weight * K.mean(difference_tensor ** 2)
+        loss_tensor += l2_weight * K.sum(difference_tensor ** 2)
 
     gradient_tensor = K.gradients(loss_tensor, [input_tensor])[0]
     gradient_tensor /= K.maximum(
@@ -118,7 +118,8 @@ def optimize_example_for_class(
     assert target_class >= 0
     assert num_iterations > 0
     assert learning_rate > 0.
-    assert (l2_weight is None or l2_weight > 0.)
+    if l2_weight <= 0:
+        l2_weight = None
 
     num_output_neurons = (
         model_object.layers[-1].output.get_shape().as_list()[-1]

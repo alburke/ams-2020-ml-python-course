@@ -444,7 +444,8 @@ def plot_many_predictors_sans_barbs(
     ))
 
     figure_object, axes_object_matrix = _create_paneled_figure(
-        num_rows=num_panel_rows, num_columns=num_panel_columns
+        num_rows=num_panel_rows, num_columns=num_panel_columns,
+        horizontal_spacing=0.15, vertical_spacing=0.15
     )
 
     for i in range(num_panel_rows):
@@ -485,7 +486,7 @@ def plot_many_predictors_sans_barbs(
                     data_values=predictor_matrix[..., k],
                     colour_map_object=this_colour_map_object,
                     colour_norm_object=this_colour_norm_object,
-                    plot_horizontal=True,
+                    plot_horizontal=True, fraction_of_axis_length=0.85,
                     plot_min_arrow=False, plot_max_arrow=True
                 )
             else:
@@ -495,7 +496,7 @@ def plot_many_predictors_sans_barbs(
                     colour_map_object=this_colour_map_object,
                     min_value=this_min_colour_value,
                     max_value=this_max_colour_value,
-                    plot_horizontal=True,
+                    plot_horizontal=True, fraction_of_axis_length=0.85,
                     plot_min_arrow=True, plot_max_arrow=True
                 )
 

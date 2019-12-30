@@ -139,10 +139,10 @@ def _plot_cam_one_channel(
     assert len(class_activation_matrix_2d.shape) == 2
 
     max_contour_value = max([
-        min_contour_value + 1e-3, max_contour_value
+        min_contour_value + 1e-6, max_contour_value
     ])
 
-    contour_interval = max([contour_interval, 1e-4])
+    contour_interval = max([contour_interval, 1e-7])
     contour_interval = min([
         contour_interval, max_contour_value - min_contour_value
     ])
