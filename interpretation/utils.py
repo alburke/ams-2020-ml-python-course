@@ -1,12 +1,64 @@
 """Helper methods for model interpretation in general."""
 
+import copy
+import glob
+import time
+import calendar
+import os.path
 import numpy
-import matplotlib.colors
-from matplotlib import pyplot
+import netCDF4
 from scipy.ndimage.filters import gaussian_filter
 
-DEFAULT_HORIZ_CBAR_PADDING = 0.01
-DEFAULT_VERTICAL_CBAR_PADDING = 0.04
+DATE_FORMAT = '%Y%m%d'
+DATE_FORMAT_REGEX = '[0-9][0-9][0-9][0-9][0-1][0-9][0-3][0-9]'
+
+CSV_TARGET_NAME = 'RVORT1_MAX-future_max'
+TARGET_NAME = 'max_future_vorticity_s01'
+
+NETCDF_REFL_NAME = 'REFL_COM_curr'
+NETCDF_TEMP_NAME = 'T2_curr'
+NETCDF_U_WIND_NAME = 'U10_curr'
+NETCDF_V_WIND_NAME = 'V10_curr'
+NETCDF_PREDICTOR_NAMES = [
+    NETCDF_REFL_NAME, NETCDF_TEMP_NAME, NETCDF_U_WIND_NAME, NETCDF_V_WIND_NAME
+]
+
+REFLECTIVITY_NAME = 'reflectivity_dbz'
+TEMPERATURE_NAME = 'temperature_kelvins'
+U_WIND_NAME = 'u_wind_m_s01'
+V_WIND_NAME = 'v_wind_m_s01'
+PREDICTOR_NAMES = [
+    REFLECTIVITY_NAME, TEMPERATURE_NAME, U_WIND_NAME, V_WIND_NAME
+]
+
+NETCDF_TRACK_ID_NAME = 'track_id'
+NETCDF_TRACK_STEP_NAME = 'track_step'
+NETCDF_TARGET_NAME = 'RVORT1_MAX_future'
+
+STORM_IDS_KEY = 'storm_ids'
+STORM_STEPS_KEY = 'storm_steps'
+PREDICTOR_NAMES_KEY = 'predictor_names'
+PREDICTOR_MATRIX_KEY = 'predictor_matrix'
+TARGET_NAME_KEY = 'target_name'
+TARGET_MATRIX_KEY = 'target_matrix'
+
+
+def _image_file_name_to_date(netcdf_file_name):
+    """Parses date from name of image (NetCDF) file.
+
+    :param netcdf_file_name: Path to input file.
+    :return: date_string: Date (format "yyyymmdd").
+    """
+
+    pathless_file_name = os.path.split(netcdf_file_name)[-1]
+
+    date_string = pathless_file_name.replace(
+        'NCARSTORM_', ''
+    ).replace('-0000_d01_model_patches.nc', '')
+
+    # Verify.
+    time_string_to_unix(time_string=date_string, time_format=DATE_FORMAT)
+    return date_string
 
 
 def apply_gaussian_filter(input_matrix, e_folding_radius_grid_cells):
@@ -24,117 +76,153 @@ def apply_gaussian_filter(input_matrix, e_folding_radius_grid_cells):
     )
 
 
-def plot_colour_bar(
-        axes_object_or_matrix, data_values, colour_map_object,
-        colour_norm_object, plot_horizontal, padding=None,
-        plot_min_arrow=True, plot_max_arrow=True, fraction_of_axis_length=1.,
-        font_size=30):
-    """Plots colour bar on existing axes.
+def time_string_to_unix(time_string, time_format):
+    """Converts time from string to Unix format.
 
-    :param axes_object_or_matrix: Axes handle or numpy array thereof.  Each
-        handle should be an instance of `matplotlib.axes._subplots.AxesSubplot`.
-    :param data_values: numpy array of data values to which the colour bar
-        applies.
-    :param colour_map_object: Colour scheme (instance of `matplotlib.pyplot.cm`
-        or similar).
-    :param colour_norm_object: Normalizer (maps from data space to colour-bar
-        space, which ranges from 0...1).  Should be an instance of
-        `matplotlib.colors.Normalize` or similar.
-    :param plot_horizontal: Boolean flag.  If True, colour bar will be
-        horizontal and below axes.  If False, will be vertical and to the right
-        of axes.
-    :param padding: Space between colour bar and axes (in range 0...1).
-    :param plot_min_arrow: Boolean flag.  If True, will plot arrow at lower end
-        of colour bar, to indicate that lower values are possible.
-    :param plot_max_arrow: Same but for upper end of colour bar.
-    :param fraction_of_axis_length: Determines length of colour bar.  For
-        example, if `plot_horizontal == True` and
-        `fraction_of_axis_length = 0.9`, will take up 90% of possible horizontal
-        space.
-    :param font_size: Font size.
-    :return: colour_bar_object: Colour-bar handle (instance of
-        `matplotlib.pyplot.colorbar`).
+    Unix format = seconds since 0000 UTC 1 Jan 1970.
+
+    :param time_string: Time string.
+    :param time_format: Format of time string (example: "%Y%m%d" or
+        "%Y-%m-%d-%H%M%S").
+    :return: unix_time_sec: Time in Unix format.
     """
 
-    # Process input args.
-    plot_horizontal = bool(plot_horizontal)
-    plot_min_arrow = bool(plot_min_arrow)
-    plot_max_arrow = bool(plot_max_arrow)
-    assert fraction_of_axis_length > 0.
+    return calendar.timegm(time.strptime(time_string, time_format))
 
-    if plot_min_arrow and plot_max_arrow:
-        extend_arg = 'both'
-    elif plot_min_arrow:
-        extend_arg = 'min'
-    elif plot_max_arrow:
-        extend_arg = 'max'
-    else:
-        extend_arg = 'neither'
 
-    if padding is None:
-        if plot_horizontal:
-            padding = DEFAULT_HORIZ_CBAR_PADDING
-        else:
-            padding = DEFAULT_VERTICAL_CBAR_PADDING
+def time_unix_to_string(unix_time_sec, time_format):
+    """Converts time from Unix format to string.
 
-    assert padding >= 0.
+    Unix format = seconds since 0000 UTC 1 Jan 1970.
 
-    scalar_mappable_object = pyplot.cm.ScalarMappable(
-        cmap=colour_map_object, norm=colour_norm_object
+    :param unix_time_sec: Time in Unix format.
+    :param time_format: Desired format of time string (example: "%Y%m%d" or
+        "%Y-%m-%d-%H%M%S").
+    :return: time_string: Time string.
+    """
+
+    return time.strftime(time_format, time.gmtime(unix_time_sec))
+
+
+def find_many_image_files(first_date_string, last_date_string, image_dir_name):
+    """Finds image (NetCDF) files in the given date range.
+
+    :param first_date_string: First date ("yyyymmdd") in range.
+    :param last_date_string: Last date ("yyyymmdd") in range.
+    :param image_dir_name: Name of directory with image (NetCDF) files.
+    :return: netcdf_file_names: 1-D list of paths to image files.
+    """
+
+    first_time_unix_sec = time_string_to_unix(
+        time_string=first_date_string, time_format=DATE_FORMAT
     )
-    scalar_mappable_object.set_array(data_values)
-
-    if isinstance(axes_object_or_matrix, numpy.ndarray):
-        axes_arg = axes_object_or_matrix.ravel().tolist()
-    else:
-        axes_arg = axes_object_or_matrix
-
-    colour_bar_object = pyplot.colorbar(
-        ax=axes_arg, mappable=scalar_mappable_object,
-        orientation='horizontal' if plot_horizontal else 'vertical',
-        pad=padding, extend=extend_arg, shrink=fraction_of_axis_length
+    last_time_unix_sec = time_string_to_unix(
+        time_string=last_date_string, time_format=DATE_FORMAT
     )
 
-    colour_bar_object.ax.tick_params(labelsize=font_size)
+    netcdf_file_pattern = (
+        '{0:s}/NCARSTORM_{1:s}-0000_d01_model_patches.nc'
+    ).format(image_dir_name, DATE_FORMAT_REGEX)
 
-    if plot_horizontal:
-        colour_bar_object.ax.set_xticklabels(
-            colour_bar_object.ax.get_xticklabels(), rotation=90
+    netcdf_file_names = glob.glob(netcdf_file_pattern)
+    netcdf_file_names.sort()
+
+    file_date_strings = [_image_file_name_to_date(f) for f in netcdf_file_names]
+    file_times_unix_sec = numpy.array([
+        time_string_to_unix(time_string=d, time_format=DATE_FORMAT)
+        for d in file_date_strings
+    ], dtype=int)
+
+    good_indices = numpy.where(numpy.logical_and(
+        file_times_unix_sec >= first_time_unix_sec,
+        file_times_unix_sec <= last_time_unix_sec
+    ))[0]
+
+    return [netcdf_file_names[k] for k in good_indices]
+
+
+def read_image_file(netcdf_file_name):
+    """Reads storm-centered images from NetCDF file.
+
+    E = number of examples (storm objects) in file
+    M = number of rows in each storm-centered grid
+    N = number of columns in each storm-centered grid
+    C = number of channels (predictor variables)
+
+    :param netcdf_file_name: Path to input file.
+    :return: image_dict: Dictionary with the following keys.
+    image_dict['storm_ids']: length-E list of storm IDs (integers).
+    image_dict['storm_steps']: length-E numpy array of storm steps (integers).
+    image_dict['predictor_names']: length-C list of predictor names.
+    image_dict['predictor_matrix']: E-by-M-by-N-by-C numpy array of predictor
+        values.
+    image_dict['target_name']: Name of target variable.
+    image_dict['target_matrix']: E-by-M-by-N numpy array of target values.
+    """
+
+    dataset_object = netCDF4.Dataset(netcdf_file_name)
+
+    storm_ids = numpy.array(
+        dataset_object.variables[NETCDF_TRACK_ID_NAME][:], dtype=int
+    )
+    storm_steps = numpy.array(
+        dataset_object.variables[NETCDF_TRACK_STEP_NAME][:], dtype=int
+    )
+
+    predictor_matrix = None
+
+    for this_predictor_name in NETCDF_PREDICTOR_NAMES:
+        this_predictor_matrix = numpy.array(
+            dataset_object.variables[this_predictor_name][:], dtype=float
+        )
+        this_predictor_matrix = numpy.expand_dims(
+            this_predictor_matrix, axis=-1
         )
 
-    return colour_bar_object
+        if predictor_matrix is None:
+            predictor_matrix = this_predictor_matrix + 0.
+        else:
+            predictor_matrix = numpy.concatenate(
+                (predictor_matrix, this_predictor_matrix), axis=-1
+            )
+
+    target_matrix = numpy.array(
+        dataset_object.variables[NETCDF_TARGET_NAME][:], dtype=float
+    )
+
+    return {
+        STORM_IDS_KEY: storm_ids,
+        STORM_STEPS_KEY: storm_steps,
+        PREDICTOR_NAMES_KEY: PREDICTOR_NAMES,
+        PREDICTOR_MATRIX_KEY: predictor_matrix,
+        TARGET_NAME_KEY: TARGET_NAME,
+        TARGET_MATRIX_KEY: target_matrix
+    }
 
 
-def plot_linear_colour_bar(
-        axes_object_or_matrix, data_values, colour_map_object,
-        min_value, max_value, plot_horizontal, padding=None,
-        plot_min_arrow=True, plot_max_arrow=True, fraction_of_axis_length=1.,
-        font_size=30):
-    """Plots colour bar with linear scale.
+def read_many_image_files(netcdf_file_names):
+    """Reads storm-centered images from many NetCDF files.
 
-    :param axes_object_or_matrix: See doc for `plot_colour_bar`.
-    :param data_values: Same.
-    :param colour_map_object: Same.
-    :param min_value: Minimum value in colour bar.
-    :param max_value: Max value in colour bar.
-    :param plot_horizontal: See doc for `plot_colour_bar`.
-    :param padding: Same.
-    :param plot_min_arrow: Same.
-    :param plot_max_arrow: Same.
-    :param fraction_of_axis_length: Same.
-    :param font_size: Same.
+    :param netcdf_file_names: 1-D list of paths to input files.
+    :return: image_dict: See doc for `read_image_file`.
     """
 
-    assert max_value > min_value
-    colour_norm_object = matplotlib.colors.Normalize(
-        vmin=min_value, vmax=max_value, clip=False
-    )
+    image_dict = None
+    keys_to_concat = [
+        STORM_IDS_KEY, STORM_STEPS_KEY, PREDICTOR_MATRIX_KEY, TARGET_MATRIX_KEY
+    ]
 
-    return plot_colour_bar(
-        axes_object_or_matrix=axes_object_or_matrix, data_values=data_values,
-        colour_map_object=colour_map_object,
-        colour_norm_object=colour_norm_object,
-        plot_horizontal=plot_horizontal, padding=padding,
-        plot_min_arrow=plot_min_arrow, plot_max_arrow=plot_max_arrow,
-        fraction_of_axis_length=fraction_of_axis_length, font_size=font_size
-    )
+    for this_file_name in netcdf_file_names:
+        print('Reading data from: "{0:s}"...'.format(this_file_name))
+        this_image_dict = read_image_file(this_file_name)
+
+        if image_dict is None:
+            image_dict = copy.deepcopy(this_image_dict)
+            continue
+
+        for this_key in keys_to_concat:
+            image_dict[this_key] = numpy.concatenate((
+                image_dict[this_key], this_image_dict[this_key]
+            ), axis=0)
+
+    return image_dict
