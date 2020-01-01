@@ -239,7 +239,7 @@ def read_many_feature_files(csv_file_names):
             list_of_metadata_tables[0], axis=1
         )[0]
 
-        #print(list_of_metadata_tables)
+        print(pandas.DataFrame(list_of_metadata_tables).head())
 
         list_of_predictor_tables[i] = list_of_predictor_tables[i].align(
             list_of_predictor_tables[0], axis=1
