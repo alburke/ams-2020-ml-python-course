@@ -223,10 +223,10 @@ def read_many_feature_files(csv_file_names):
     list_of_predictor_tables = [pandas.DataFrame()] * num_files
     list_of_target_tables = [pandas.DataFrame()] * num_files
 
-    print(csv_file_names)
+    #print(csv_file_names)
 
     for i in range(num_files):
-        print('Reading data from: "{0:s}"...'.format(csv_file_names[i]))
+        #print('Reading data from: "{0:s}"...'.format(csv_file_names[i]))
 
         (list_of_metadata_tables[i], list_of_predictor_tables[i],
          list_of_target_tables[i]
@@ -239,7 +239,7 @@ def read_many_feature_files(csv_file_names):
             list_of_metadata_tables[0], axis=1
         )[0]
 
-        print(list_of_metadata_tables)
+        #print(list_of_metadata_tables)
 
         list_of_predictor_tables[i] = list_of_predictor_tables[i].align(
             list_of_predictor_tables[0], axis=1
@@ -332,7 +332,7 @@ def get_normalization_params(csv_file_names):
     norm_dict_by_predictor = None
 
     for this_file_name in csv_file_names:
-        print('Reading data from: "{0:s}"...'.format(this_file_name))
+        #print('Reading data from: "{0:s}"...'.format(this_file_name))
         this_predictor_table = read_feature_file(this_file_name)[1]
 
         if predictor_names is None:
@@ -448,7 +448,7 @@ def get_binarization_threshold(csv_file_names, percentile_level):
     max_target_values = numpy.array([])
 
     for this_file_name in csv_file_names:
-        print('Reading data from: "{0:s}"...'.format(this_file_name))
+        #print('Reading data from: "{0:s}"...'.format(this_file_name))
         this_target_table = read_feature_file(this_file_name)[-1]
 
         max_target_values = numpy.concatenate((
