@@ -43,7 +43,7 @@ EXTRANEOUS_COLUMNS = [
 ]
 
 TARGET_NAME = 'RVORT1_MAX-future_max'
-BINARIZED_TARGET_NAME = 'strong_future_rotation_flag'
+BINARIZED_TARGET_NAME = 'RVORT1_MAX-future_max'
 
 NUM_VALUES_KEY = 'num_values'
 MEAN_VALUE_KEY = 'mean_value'
@@ -239,7 +239,7 @@ def read_many_feature_files(csv_file_names):
             list_of_metadata_tables[0], axis=1
         )[0]
 
-        print(pandas.DataFrame(list_of_metadata_tables).head())
+        #print(list_of_metadata_tables)
 
         list_of_predictor_tables[i] = list_of_predictor_tables[i].align(
             list_of_predictor_tables[0], axis=1
