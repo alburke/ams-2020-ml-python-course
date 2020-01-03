@@ -1122,3 +1122,21 @@ def train_classification_gbt(model_object, training_predictor_table,
     )
 
     return model_object
+
+def cross_validation():
+    linreg_model_object = setup_linear_regression(lambda1=0., lambda2=0.)
+
+    _ = train_linear_regression(
+        model_object=linreg_model_object,
+        training_predictor_table=training_predictor_table,
+        training_target_table=training_target_table)
+
+    validation_predictions = linreg_model_object.predict(
+        validation_predictor_table.as_matrix()
+    )
+
+    _ = evaluate_regression(
+        target_values=validation_target_table[utils.TARGET_NAME].values,
+        predicted_target_values=validation_predictions,
+        mean_training_target_value=mean_training_target_value,
+        dataset_name='validation')
