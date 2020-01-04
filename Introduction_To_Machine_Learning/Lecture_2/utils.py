@@ -17,8 +17,10 @@ import sklearn.ensemble
 import roc_curves
 import performance_diagrams as perf_diagrams
 import attr_diagrams
-
-
+from matplotlib.ticker import FuncFormatter
+import sklearn.neural_network
+import sklearn.svm
+import sklearn.model_selection
 # Directories.
 MODULE2_DIR_NAME = '.'
 SHORT_COURSE_DIR_NAME = '..'
@@ -927,6 +929,70 @@ def train_logistic_regression(model_object, training_predictor_table,
     return model_object
 
 
+
+def plot_learning_curves(estimator, X_train, y_train, X_val, y_val,
+                         suptitle='', title='', xlabel='', ylabel='',ylim=None):
+    
+    # create lists to store train and validation scores
+    train_score = []
+    val_score = []
+
+    # create ten incremental training set sizes
+    training_set_sizes = numpy.linspace(5, len(X_train), 10, dtype='int')
+
+    # for each one of those training set sizes
+    for i in training_set_sizes:
+        # fit the model only using that many training examples
+        estimator.fit(X_train.iloc[0:i, :], y_train[0:i])
+        # calculate the training accuracy only using those training examples
+        train_accuracy = sklearn.metrics.accuracy_score(
+                                    y_train[0:i],
+                                    estimator.predict(X_train.iloc[0:i, :])
+                                    )
+        # calculate the validation accuracy using the whole validation set
+        val_accuracy = sklearn.metrics.accuracy_score(
+                                    y_val,
+                                    estimator.predict(X_val)
+                                    )
+        # store the scores in their respective lists
+        train_score.append(train_accuracy)
+        val_score.append(val_accuracy)
+        
+    # plot learning curves
+    
+    fig, ax = pyplot.subplots(figsize=(10, 6))
+    ax.grid() 
+    ax.plot(training_set_sizes, train_score, 'o-', c='red')
+    ax.plot(training_set_sizes, val_score, 'o-', c='steelblue')
+
+    # format the chart to make it look nice
+    fig.suptitle(suptitle, fontweight='bold', fontsize='20')
+    ax.set_title(title, size=20)
+    ax.set_xlabel(xlabel, size=16)
+    ax.set_ylabel(ylabel, size=16)
+    ax.legend(['training set', 'validation set'], fontsize=16)
+    ax.tick_params(axis='both', labelsize=12)
+    def percentages(x, pos):
+        """The two args are the value and tick position"""
+        if x < 1:
+            return '{:1.0f}'.format(x*100)
+        return '{:1.0f}%'.format(x*100)
+
+    def numbers(x, pos):
+        """The two args are the value and tick position"""
+        if x >= 1000:
+            return '{:1,.0f}'.format(x)
+        return '{:1.0f}'.format(x)
+
+    y_formatter = FuncFormatter(percentages)
+    ax.yaxis.set_major_formatter(y_formatter)
+
+    x_formatter = FuncFormatter(numbers)
+    ax.xaxis.set_major_formatter(x_formatter)
+    pyplot.show()
+
+
+
 def eval_binary_classifn(
         observed_labels, forecast_probabilities, training_event_frequency,
         verbose=True, create_plots=True, dataset_name=None):
@@ -1168,6 +1234,70 @@ def train_classification_gbt(model_object, training_predictor_table,
     """Trains gradient-boosted trees for classification.
     :param model_object: Untrained model created by
         `setup_classification_gbt`.
+    :param training_predictor_table: See doc for `read_feature_file`.
+    :param training_target_table: Same.
+    :return: model_object: Trained version of input.
+    """
+
+    model_object.fit(
+        X=training_predictor_table.as_matrix(),
+        y=training_target_table[BINARIZED_TARGET_NAME].values
+    )
+
+    return model_object 
+
+
+
+def setup_classification_SVM(kernel, C, gamma, probability = True):
+    """Sets up (but does not train) Support vector machines for classification.
+    :kernel: linear, rbf, multinomial
+    :C: margin of classifiaction or regularization parameter, must be a positive number.
+    :gamma: kernel coefficinet for rbf, polynomial and sigmoid.
+    :probability = True, whether to enable probability estimate. if not put is as False. 
+    :return: model_object: Instance of
+        `sklearn.sklearn.svm.SVC`.
+    """
+
+    return sklearn.svm.SVC(kernel = kernel, C = C, gamma = gamma, probability=True)
+
+
+def train_classification_SVM(model_object, training_predictor_table,training_target_table):
+    """Trains Support vector machines for classification.
+    :param model_object: Untrained model created by
+        `setup_classification_svm`.
+    :param training_predictor_table: See doc for `read_feature_file`.
+    :param training_target_table: Same.
+    :return: model_object: Trained version of input.
+    """
+
+    model_object.fit(
+        X=training_predictor_table.as_matrix(),
+        y=training_target_table[BINARIZED_TARGET_NAME].values
+    )
+
+    return model_object
+
+
+def setup_classification_MLP(activation, solver, alpha, hidden_layer_size):
+    """Sets up (but does not train) Multilayer perceptron for classification.
+    :activation: activation function for the hidden layer: {‘identity’, ‘logistic’, ‘tanh’, ‘relu’}, default=’relu’
+    :solver: The solver for weight optimization. {‘lbfgs’, ‘sgd’, ‘adam’}, default=’adam’
+    :alpha: L2 penalty (regularization term) parameter. float, default=0.0001
+    :hidden_layer_sizestuple: length = n_layers - 2, default=(100,) 
+    : The ith element represents the number of neurons in the ith hidden layer.
+    :return: model_object: Instance of
+        `sklearn.neural_network.MLPClassifier`.
+    """
+
+    return sklearn.neural_network.MLPClassifier(
+    	activation = activation, solver = solver, alpha = alpha, hidden_layer_size = hidden_layer_size)
+
+
+def train_classification_MLP(model_object, training_predictor_table,
+                             training_target_table):
+    """Trains MLP for classification.
+    :param model_object: Untrained model created by
+        `sklearn.neural_network.MLPClassifier`.
     :param training_predictor_table: See doc for `read_feature_file`.
     :param training_target_table: Same.
     :return: model_object: Trained version of input.
