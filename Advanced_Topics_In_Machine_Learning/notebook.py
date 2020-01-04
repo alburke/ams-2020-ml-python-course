@@ -15,6 +15,12 @@ IMAGE_DIR_NAME = '{0:s}/data/track_data_ncar_ams_3km_nc_small'.format(
     SHORT_COURSE_DIR_NAME
 )
 
+BEST_HIT_MATRIX_KEY = 'best_hits_predictor_matrix'
+WORST_FALSE_ALARM_MATRIX_KEY = 'worst_false_alarms_predictor_matrix'
+WORST_MISS_MATRIX_KEY = 'worst_misses_predictor_matrix'
+BEST_CORRECT_NULLS_MATRIX_KEY = 'best_correct_nulls_predictor_matrix'
+PREDICTOR_NAMES_KEY = 'predictor_names'
+
 SEPARATOR_STRING = '\n\n' + '*' * 50 + '\n\n'
 MINOR_SEPARATOR_STRING = '\n\n' + '-' * 50 + '\n\n'
 
@@ -948,6 +954,281 @@ def __saliency_example4(cnn_model_object, validation_image_dict,
     )
 
 
+def __find_extreme_examples(cnn_model_object, validation_image_dict,
+                            normalization_dict, binarization_threshold):
+    """Finds extreme examples and composite predictor fields for each.
+
+    :param cnn_model_object: See doc for `__saliency_example1`.
+    :param validation_image_dict: Same.
+    :param normalization_dict: Same.
+    :param binarization_threshold: Binarization threshold for target variable.
+    """
+
+    predictor_matrix_denorm = (
+        validation_image_dict[utils.PREDICTOR_MATRIX_KEY] + 0.
+    )
+    predictor_names = validation_image_dict[utils.PREDICTOR_NAMES_KEY]
+
+    predictor_matrix_norm, _ = normalization.normalize_images(
+        predictor_matrix=predictor_matrix_denorm + 0.,
+        predictor_names=predictor_names,
+        normalization_dict=normalization_dict
+    )
+
+    validation_event_probs = cnn.apply_cnn(
+        model_object=cnn_model_object, predictor_matrix=predictor_matrix_norm,
+        verbose=True
+    )
+    print('\n')
+
+    target_values = binarization.binarize_target_images(
+        target_matrix=validation_image_dict[utils.TARGET_MATRIX_KEY],
+        binarization_threshold=binarization_threshold
+    )
+
+    this_dict = utils.find_extreme_examples(
+        class_labels=target_values, event_probabilities=validation_event_probs,
+        num_examples_per_set=100
+    )
+    best_hit_indices = this_dict[utils.HIT_INDICES_KEY]
+    worst_false_alarm_indices = this_dict[utils.FALSE_ALARM_INDICES_KEY]
+    worst_miss_indices = this_dict[utils.MISS_INDICES_KEY]
+    best_correct_null_indices = this_dict[utils.CORRECT_NULL_INDICES_KEY]
+
+    extreme_example_dict_denorm = {
+        BEST_HIT_MATRIX_KEY: predictor_matrix_denorm[best_hit_indices, ...],
+        WORST_FALSE_ALARM_MATRIX_KEY:
+            predictor_matrix_denorm[worst_false_alarm_indices, ...],
+        WORST_MISS_MATRIX_KEY:
+            predictor_matrix_denorm[worst_miss_indices, ...],
+        BEST_CORRECT_NULLS_MATRIX_KEY:
+            predictor_matrix_denorm[best_correct_null_indices, ...],
+        PREDICTOR_NAMES_KEY: predictor_names
+    }
+
+    extreme_example_dict_norm = {
+        BEST_HIT_MATRIX_KEY: predictor_matrix_norm[best_hit_indices, ...],
+        WORST_FALSE_ALARM_MATRIX_KEY:
+            predictor_matrix_norm[worst_false_alarm_indices, ...],
+        WORST_MISS_MATRIX_KEY:
+            predictor_matrix_norm[worst_miss_indices, ...],
+        BEST_CORRECT_NULLS_MATRIX_KEY:
+            predictor_matrix_norm[best_correct_null_indices, ...],
+        PREDICTOR_NAMES_KEY: predictor_names
+    }
+
+    this_bh_matrix = utils.run_pmm_many_variables(
+        field_matrix=extreme_example_dict_denorm[BEST_HIT_MATRIX_KEY]
+    )
+    this_wfa_matrix = utils.run_pmm_many_variables(
+        field_matrix=extreme_example_dict_denorm[WORST_FALSE_ALARM_MATRIX_KEY]
+    )
+    this_wm_matrix = utils.run_pmm_many_variables(
+        field_matrix=extreme_example_dict_denorm[WORST_MISS_MATRIX_KEY]
+    )
+    this_bcn_matrix = utils.run_pmm_many_variables(
+        field_matrix=extreme_example_dict_denorm[BEST_CORRECT_NULLS_MATRIX_KEY]
+    )
+
+    extreme_example_dict_denorm_pmm = {
+        BEST_HIT_MATRIX_KEY: this_bh_matrix,
+        WORST_FALSE_ALARM_MATRIX_KEY: this_wfa_matrix,
+        WORST_MISS_MATRIX_KEY: this_wm_matrix,
+        BEST_CORRECT_NULLS_MATRIX_KEY: this_bcn_matrix,
+        PREDICTOR_NAMES_KEY: predictor_names
+    }
+
+
+def __saliency_example5(cnn_model_object, extreme_example_dict_norm,
+                        extreme_example_dict_denorm_pmm):
+    """Computes saliency wrt strong-rotation probability for each composite.
+
+    :param cnn_model_object: See doc for `__saliency_example1`.
+    :param extreme_example_dict_norm: Dictionary with the following keys,
+        containing normalized predictors for each set of extreme examples.
+
+    "best_hits_predictor_matrix": numpy array with normalized predictors for
+        best hits.
+    "worst_false_alarms_predictor_matrix": Same for worst false alarms.
+    "worst_misses_predictor_matrix": Same for worst misses.
+    "best_correct_nulls_predictor_matrix": Same for best correct nulls.
+    "predictor_names": List of predictor names, in order that they occur in the
+        last axis of each matrix.
+
+    :param extreme_example_dict_denorm_pmm: Same as `extreme_example_dict_norm`,
+        except that each matrix contains mean denormalized predictor fields,
+        instead of the normalized fields for each example.
+    """
+
+    best_hits_saliency_matrix = saliency.get_saliency_maps_for_class(
+        model_object=cnn_model_object, target_class=1,
+        list_of_input_matrices=[extreme_example_dict_norm[BEST_HIT_MATRIX_KEY]]
+    )[0]
+    best_hits_saliency_matrix_pmm = utils.run_pmm_many_variables(
+        field_matrix=best_hits_saliency_matrix
+    )
+    best_hits_saliency_matrix_pmm = saliency.smooth_saliency_maps(
+        saliency_matrices=[best_hits_saliency_matrix_pmm],
+        smoothing_radius_grid_cells=1
+    )[0]
+
+    worst_fa_saliency_matrix = saliency.get_saliency_maps_for_class(
+        model_object=cnn_model_object, target_class=1,
+        list_of_input_matrices=
+        [extreme_example_dict_norm[WORST_FALSE_ALARM_MATRIX_KEY]]
+    )[0]
+    worst_fa_saliency_matrix_pmm = utils.run_pmm_many_variables(
+        field_matrix=worst_fa_saliency_matrix
+    )
+    worst_fa_saliency_matrix_pmm = saliency.smooth_saliency_maps(
+        saliency_matrices=[worst_fa_saliency_matrix_pmm],
+        smoothing_radius_grid_cells=1
+    )[0]
+
+    worst_misses_saliency_matrix = saliency.get_saliency_maps_for_class(
+        model_object=cnn_model_object, target_class=1,
+        list_of_input_matrices=
+        [extreme_example_dict_norm[WORST_MISS_MATRIX_KEY]]
+    )[0]
+    worst_misses_saliency_matrix_pmm = utils.run_pmm_many_variables(
+        field_matrix=worst_misses_saliency_matrix
+    )
+    worst_misses_saliency_matrix_pmm = saliency.smooth_saliency_maps(
+        saliency_matrices=[worst_misses_saliency_matrix_pmm],
+        smoothing_radius_grid_cells=1
+    )[0]
+
+    best_nulls_saliency_matrix = saliency.get_saliency_maps_for_class(
+        model_object=cnn_model_object, target_class=1,
+        list_of_input_matrices=
+        [extreme_example_dict_norm[BEST_CORRECT_NULLS_MATRIX_KEY]]
+    )[0]
+    best_nulls_saliency_matrix_pmm = utils.run_pmm_many_variables(
+        field_matrix=best_nulls_saliency_matrix
+    )
+    best_nulls_saliency_matrix_pmm = saliency.smooth_saliency_maps(
+        saliency_matrices=[best_nulls_saliency_matrix_pmm],
+        smoothing_radius_grid_cells=1
+    )[0]
+
+    best_hits_matrix_denorm_pmm = extreme_example_dict_denorm_pmm[
+        BEST_HIT_MATRIX_KEY
+    ]
+    worst_fa_matrix_denorm_pmm = extreme_example_dict_denorm_pmm[
+        WORST_FALSE_ALARM_MATRIX_KEY
+    ]
+    worst_misses_matrix_denorm_pmm = extreme_example_dict_denorm_pmm[
+        WORST_MISS_MATRIX_KEY
+    ]
+    best_nulls_matrix_denorm_pmm = extreme_example_dict_denorm_pmm[
+        BEST_CORRECT_NULLS_MATRIX_KEY
+    ]
+    predictor_names = extreme_example_dict_denorm_pmm[PREDICTOR_NAMES_KEY]
+
+    concat_predictor_matrix = numpy.stack((
+        best_hits_matrix_denorm_pmm, worst_fa_matrix_denorm_pmm,
+        worst_misses_matrix_denorm_pmm, best_nulls_matrix_denorm_pmm,
+    ), axis=0)
+
+    temperature_matrix_kelvins = concat_predictor_matrix[
+        ..., predictor_names.index(utils.TEMPERATURE_NAME)
+    ]
+    min_temp_kelvins = numpy.percentile(temperature_matrix_kelvins, 1)
+    max_temp_kelvins = numpy.percentile(temperature_matrix_kelvins, 99)
+
+    wind_indices = numpy.array([
+        predictor_names.index(utils.U_WIND_NAME),
+        predictor_names.index(utils.V_WIND_NAME)
+    ], dtype=int)
+
+    max_speed_m_s01 = numpy.percentile(
+        numpy.absolute(concat_predictor_matrix[..., wind_indices]), 99
+    )
+
+    concat_saliency_matrix = numpy.stack((
+        best_hits_saliency_matrix_pmm, worst_fa_saliency_matrix_pmm,
+        worst_misses_saliency_matrix_pmm, best_nulls_saliency_matrix_pmm,
+    ), axis=0)
+
+    max_saliency = numpy.percentile(numpy.absolute(concat_saliency_matrix), 99)
+
+    figure_object, axes_object_matrix = (
+        plotting.plot_many_predictors_sans_barbs(
+            predictor_matrix=best_hits_matrix_denorm_pmm,
+            predictor_names=predictor_names,
+            min_colour_temp_kelvins=min_temp_kelvins,
+            max_colour_temp_kelvins=max_temp_kelvins,
+            max_colour_wind_speed_m_s01=max_speed_m_s01)
+    )
+
+    saliency.plot_saliency_maps(
+        saliency_matrix_3d=best_hits_saliency_matrix_pmm,
+        axes_object_matrix=axes_object_matrix,
+        colour_map_object=pyplot.get_cmap('Greys'),
+        max_contour_value=max_saliency,
+        contour_interval=max_saliency / 8
+    )
+
+    figure_object.suptitle('Saliency for best hits')
+
+    figure_object, axes_object_matrix = (
+        plotting.plot_many_predictors_sans_barbs(
+            predictor_matrix=worst_fa_matrix_denorm_pmm,
+            predictor_names=predictor_names,
+            min_colour_temp_kelvins=min_temp_kelvins,
+            max_colour_temp_kelvins=max_temp_kelvins,
+            max_colour_wind_speed_m_s01=max_speed_m_s01)
+    )
+
+    saliency.plot_saliency_maps(
+        saliency_matrix_3d=worst_fa_saliency_matrix_pmm,
+        axes_object_matrix=axes_object_matrix,
+        colour_map_object=pyplot.get_cmap('Greys'),
+        max_contour_value=max_saliency,
+        contour_interval=max_saliency / 8
+    )
+
+    figure_object.suptitle('Saliency for worst false alarms')
+
+    figure_object, axes_object_matrix = (
+        plotting.plot_many_predictors_sans_barbs(
+            predictor_matrix=worst_misses_matrix_denorm_pmm,
+            predictor_names=predictor_names,
+            min_colour_temp_kelvins=min_temp_kelvins,
+            max_colour_temp_kelvins=max_temp_kelvins,
+            max_colour_wind_speed_m_s01=max_speed_m_s01)
+    )
+
+    saliency.plot_saliency_maps(
+        saliency_matrix_3d=worst_misses_saliency_matrix_pmm,
+        axes_object_matrix=axes_object_matrix,
+        colour_map_object=pyplot.get_cmap('Greys'),
+        max_contour_value=max_saliency,
+        contour_interval=max_saliency / 8
+    )
+
+    figure_object.suptitle('Saliency for worst misses')
+
+    figure_object, axes_object_matrix = (
+        plotting.plot_many_predictors_sans_barbs(
+            predictor_matrix=best_nulls_matrix_denorm_pmm,
+            predictor_names=predictor_names,
+            min_colour_temp_kelvins=min_temp_kelvins,
+            max_colour_temp_kelvins=max_temp_kelvins,
+            max_colour_wind_speed_m_s01=max_speed_m_s01)
+    )
+
+    saliency.plot_saliency_maps(
+        saliency_matrix_3d=best_nulls_saliency_matrix_pmm,
+        axes_object_matrix=axes_object_matrix,
+        colour_map_object=pyplot.get_cmap('Greys'),
+        max_contour_value=max_saliency,
+        contour_interval=max_saliency / 8
+    )
+
+    figure_object.suptitle('Saliency for best correct nulls')
+
+
 def __gradcam_example1(cnn_model_object, validation_image_dict,
                        normalization_dict):
     """Computes positive-class activation for first storm object.
@@ -1171,6 +1452,219 @@ def __gradcam_example3(cnn_model_object, validation_image_dict,
             'CAM for layer "{0:s}"'.format(this_layer_name)
         )
         pyplot.show()
+
+
+def __gradcam_example4(cnn_model_object, extreme_example_dict_norm,
+                       extreme_example_dict_denorm):
+    """Computes positive-class activation for each composite.
+
+    :param cnn_model_object: See doc for `__saliency_example5`.
+    :param extreme_example_dict_norm: Same.
+    :param extreme_example_dict_denorm: Same as `extreme_example_dict_norm` but
+        denormalized.
+    """
+
+    # num_examples_per_set = (
+    #     extreme_example_dict_norm[BEST_HIT_MATRIX_KEY].shape[0]
+    # )
+    num_examples_per_set = 10
+
+    best_hits_matrix_denorm = extreme_example_dict_denorm[
+        BEST_HIT_MATRIX_KEY
+    ][:num_examples_per_set, ...]
+
+    worst_fa_matrix_denorm = extreme_example_dict_denorm[
+        WORST_FALSE_ALARM_MATRIX_KEY
+    ][:num_examples_per_set, ...]
+
+    worst_misses_matrix_denorm = extreme_example_dict_denorm[
+        WORST_MISS_MATRIX_KEY
+    ][:num_examples_per_set, ...]
+
+    best_nulls_matrix_denorm = extreme_example_dict_denorm[
+        BEST_CORRECT_NULLS_MATRIX_KEY
+    ][:num_examples_per_set, ...]
+
+    best_hits_matrix_denorm_pmm = utils.run_pmm_many_variables(
+        field_matrix=best_hits_matrix_denorm
+    )
+    worst_fa_matrix_denorm_pmm = utils.run_pmm_many_variables(
+        field_matrix=worst_fa_matrix_denorm
+    )
+    worst_misses_matrix_denorm_pmm = utils.run_pmm_many_variables(
+        field_matrix=worst_misses_matrix_denorm
+    )
+    best_nulls_matrix_denorm_pmm = utils.run_pmm_many_variables(
+        field_matrix=best_nulls_matrix_denorm
+    )
+
+    these_dim = best_hits_matrix_denorm.shape[:-1]
+    best_hits_activn_matrix = numpy.full(these_dim, numpy.nan)
+    worst_fa_activn_matrix = numpy.full(these_dim, numpy.nan)
+    worst_misses_activn_matrix = numpy.full(these_dim, numpy.nan)
+    best_nulls_activn_matrix = numpy.full(these_dim, numpy.nan)
+
+    for i in range(num_examples_per_set):
+        print('Have computed CAM for {0:d} of {1:d} extreme examples...'.format(
+            4 * i, 4 * num_examples_per_set
+        ))
+
+        best_hits_activn_matrix[i, ...] = class_activation.run_gradcam(
+            model_object=cnn_model_object,
+            input_matrix=extreme_example_dict_norm[BEST_HIT_MATRIX_KEY][i, ...],
+            target_class=1, target_layer_name='batch_normalization_3'
+        )
+
+        worst_fa_activn_matrix[i, ...] = class_activation.run_gradcam(
+            model_object=cnn_model_object,
+            input_matrix=
+            extreme_example_dict_norm[WORST_FALSE_ALARM_MATRIX_KEY][i, ...],
+            target_class=1, target_layer_name='batch_normalization_3'
+        )
+
+        worst_misses_activn_matrix[i, ...] = class_activation.run_gradcam(
+            model_object=cnn_model_object,
+            input_matrix=
+            extreme_example_dict_norm[WORST_MISS_MATRIX_KEY][i, ...],
+            target_class=1, target_layer_name='batch_normalization_3'
+        )
+
+        best_nulls_activn_matrix[i, ...] = class_activation.run_gradcam(
+            model_object=cnn_model_object,
+            input_matrix=
+            extreme_example_dict_norm[BEST_CORRECT_NULLS_MATRIX_KEY][i, ...],
+            target_class=1, target_layer_name='batch_normalization_3'
+        )
+
+    print('Have computed CAM for all {0:d} extreme examples!'.format(
+        4 * num_examples_per_set
+    ))
+
+    best_hits_activn_matrix_pmm = utils.run_pmm_one_variable(
+        field_matrix=best_hits_activn_matrix
+    )
+    worst_fa_activn_matrix_pmm = utils.run_pmm_one_variable(
+        field_matrix=worst_fa_activn_matrix
+    )
+    worst_misses_activn_matrix_pmm = utils.run_pmm_one_variable(
+        field_matrix=worst_misses_activn_matrix
+    )
+    best_nulls_activn_matrix_pmm = utils.run_pmm_one_variable(
+        field_matrix=best_nulls_activn_matrix
+    )
+
+    concat_predictor_matrix = numpy.stack((
+        best_hits_matrix_denorm_pmm, worst_fa_matrix_denorm_pmm,
+        worst_misses_matrix_denorm_pmm, best_nulls_matrix_denorm_pmm,
+    ), axis=0)
+
+    predictor_names = extreme_example_dict_denorm[PREDICTOR_NAMES_KEY]
+
+    temperature_matrix_kelvins = concat_predictor_matrix[
+        ..., predictor_names.index(utils.TEMPERATURE_NAME)
+    ]
+    min_temp_kelvins = numpy.percentile(temperature_matrix_kelvins, 1)
+    max_temp_kelvins = numpy.percentile(temperature_matrix_kelvins, 99)
+
+    wind_indices = numpy.array([
+        predictor_names.index(utils.U_WIND_NAME),
+        predictor_names.index(utils.V_WIND_NAME)
+    ], dtype=int)
+
+    max_speed_m_s01 = numpy.percentile(
+        numpy.absolute(concat_predictor_matrix[..., wind_indices]), 99
+    )
+
+    concat_activation_matrix = numpy.stack((
+        best_hits_activn_matrix_pmm, worst_fa_activn_matrix_pmm,
+        worst_misses_activn_matrix_pmm, best_nulls_activn_matrix_pmm,
+    ), axis=0)
+
+    max_contour_value = numpy.percentile(concat_activation_matrix, 99)
+
+    figure_object, axes_object_matrix = (
+        plotting.plot_many_predictors_sans_barbs(
+            predictor_matrix=best_hits_matrix_denorm_pmm,
+            predictor_names=predictor_names,
+            min_colour_temp_kelvins=min_temp_kelvins,
+            max_colour_temp_kelvins=max_temp_kelvins,
+            max_colour_wind_speed_m_s01=max_speed_m_s01)
+    )
+
+    class_activation.plot_2d_cam(
+        class_activation_matrix_2d=best_hits_activn_matrix_pmm,
+        axes_object_matrix=axes_object_matrix,
+        num_channels=len(predictor_names),
+        colour_map_object=pyplot.get_cmap('Greys'),
+        min_contour_value=max_contour_value / 15,
+        max_contour_value=max_contour_value,
+        contour_interval=max_contour_value / 15
+    )
+
+    figure_object.suptitle('Class activation for best hits')
+
+    figure_object, axes_object_matrix = (
+        plotting.plot_many_predictors_sans_barbs(
+            predictor_matrix=worst_fa_matrix_denorm_pmm,
+            predictor_names=predictor_names,
+            min_colour_temp_kelvins=min_temp_kelvins,
+            max_colour_temp_kelvins=max_temp_kelvins,
+            max_colour_wind_speed_m_s01=max_speed_m_s01)
+    )
+
+    class_activation.plot_2d_cam(
+        class_activation_matrix_2d=worst_fa_activn_matrix_pmm,
+        axes_object_matrix=axes_object_matrix,
+        num_channels=len(predictor_names),
+        colour_map_object=pyplot.get_cmap('Greys'),
+        min_contour_value=max_contour_value / 15,
+        max_contour_value=max_contour_value,
+        contour_interval=max_contour_value / 15
+    )
+
+    figure_object.suptitle('Class activation for worst false alarms')
+
+    figure_object, axes_object_matrix = (
+        plotting.plot_many_predictors_sans_barbs(
+            predictor_matrix=worst_misses_matrix_denorm_pmm,
+            predictor_names=predictor_names,
+            min_colour_temp_kelvins=min_temp_kelvins,
+            max_colour_temp_kelvins=max_temp_kelvins,
+            max_colour_wind_speed_m_s01=max_speed_m_s01)
+    )
+
+    class_activation.plot_2d_cam(
+        class_activation_matrix_2d=worst_misses_activn_matrix_pmm,
+        axes_object_matrix=axes_object_matrix,
+        num_channels=len(predictor_names),
+        colour_map_object=pyplot.get_cmap('Greys'),
+        min_contour_value=max_contour_value / 15,
+        max_contour_value=max_contour_value,
+        contour_interval=max_contour_value / 15
+    )
+
+    figure_object.suptitle('Class activation for worst misses')
+
+    figure_object, axes_object_matrix = (
+        plotting.plot_many_predictors_sans_barbs(
+            predictor_matrix=best_nulls_matrix_denorm_pmm,
+            predictor_names=predictor_names,
+            min_colour_temp_kelvins=min_temp_kelvins,
+            max_colour_temp_kelvins=max_temp_kelvins,
+            max_colour_wind_speed_m_s01=max_speed_m_s01)
+    )
+
+    class_activation.plot_2d_cam(
+        class_activation_matrix_2d=best_nulls_activn_matrix_pmm,
+        axes_object_matrix=axes_object_matrix,
+        num_channels=len(predictor_names),
+        colour_map_object=pyplot.get_cmap('Greys'),
+        min_contour_value=max_contour_value / 15,
+        max_contour_value=max_contour_value,
+        contour_interval=max_contour_value / 15
+    )
+
+    figure_object.suptitle('Class activation for best correct nulls')
 
 
 def __backwards_opt_example1(cnn_model_object, validation_image_dict,
