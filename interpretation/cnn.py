@@ -358,6 +358,65 @@ def apply_cnn(model_object, predictor_matrix, verbose=True,
     return output_array
 
 
+def apply_upconvnet(
+        cnn_model_object, predictor_matrix, cnn_feature_layer_name,
+        upconvnet_model_object, verbose=True):
+    """Applies trained upconvnet to new data.
+
+    :param cnn_model_object: See doc for `apply_cnn`.
+    :param predictor_matrix: Same.
+    :param cnn_feature_layer_name: See doc for `output_layer_name` in
+        `apply_cnn`.
+    :param upconvnet_model_object: Trained upconvnet (instance of
+        `keras.models.Model` or `keras.models.Sequential`).  The input to the
+        upconvnet is the output from `cnn_feature_layer_name` in the CNN.
+    :param verbose: Boolean flag.  If True, will print progress messages.
+    :return: recon_predictor_matrix: Reconstructed version of input.
+    """
+
+    num_examples = predictor_matrix.shape[0]
+    num_examples_per_batch = 1000
+    recon_predictor_matrix = numpy.full(predictor_matrix.shape, numpy.nan)
+
+    for i in range(0, num_examples, num_examples_per_batch):
+        this_first_index = i
+        this_last_index = min(
+            [i + num_examples_per_batch - 1, num_examples - 1]
+        )
+
+        if verbose:
+            print((
+                'Using upconvnet to reconstruct examples {0:d}-{1:d} of '
+                '{2:d}...'
+            ).format(
+                this_first_index, this_last_index, num_examples
+            ))
+
+        these_indices = numpy.linspace(
+            this_first_index, this_last_index,
+            num=this_last_index - this_first_index + 1, dtype=int
+        )
+
+        this_feature_matrix = apply_cnn(
+            model_object=cnn_model_object,
+            predictor_matrix=predictor_matrix[these_indices, ...],
+            output_layer_name=cnn_feature_layer_name, verbose=False
+        )
+
+        recon_predictor_matrix[these_indices, ...] = (
+            upconvnet_model_object.predict(
+                this_feature_matrix, batch_size=len(these_indices)
+            )
+        )
+
+    if verbose:
+        print('Have used upconvnet to reconstruct all {0:d} examples!'.format(
+            num_examples
+        ))
+
+    return recon_predictor_matrix
+
+
 def find_model_metafile(model_file_name, raise_error_if_missing=False):
     """Finds metafile for CNN.
 
