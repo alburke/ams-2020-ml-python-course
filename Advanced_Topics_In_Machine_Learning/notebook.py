@@ -6,7 +6,9 @@ import keras
 from matplotlib import pyplot
 from interpretation import utils, normalization, binarization
 from interpretation import plotting
-from interpretation import cnn, permutation, saliency, class_activation
+from interpretation import (
+    cnn, permutation, saliency, class_activation, novelty_detection
+)
 from interpretation import backwards_optimization as backwards_opt
 
 NOTEBOOK_DIR_NAME = os.path.dirname(__file__)
@@ -1937,3 +1939,281 @@ def __backwards_opt_example4(cnn_model_object, validation_image_dict,
 
     figure_object.suptitle('Synthetic example (after optimization)')
     pyplot.show()
+
+
+def __upconvnet_example1(cnn_model_object, upconvnet_model_object,
+                         validation_image_dict, normalization_dict):
+    """Applies upconvnet to first example.
+
+    :param cnn_model_object: Trained CNN (instance of `keras.models.Model` or
+        `keras.models.Sequential`).
+    :param upconvnet_model_object: Trained upconvnet (same object types).
+    :param validation_image_dict: Same.
+    :param normalization_dict: Same.
+    """
+
+    orig_predictor_matrix_denorm = (
+        validation_image_dict[utils.PREDICTOR_MATRIX_KEY][0, ...] + 0.
+    )
+    predictor_names = validation_image_dict[utils.PREDICTOR_NAMES_KEY]
+
+    orig_predictor_matrix_norm, _ = normalization.normalize_images(
+        predictor_matrix=orig_predictor_matrix_denorm + 0.,
+        predictor_names=predictor_names,
+        normalization_dict=normalization_dict
+    )
+    orig_predictor_matrix_norm = numpy.expand_dims(
+        orig_predictor_matrix_norm, axis=0
+    )
+
+    recon_predictor_matrix_norm = cnn.apply_upconvnet(
+        cnn_model_object=cnn_model_object,
+        predictor_matrix=orig_predictor_matrix_norm,
+        cnn_feature_layer_name=cnn.get_flattening_layer(cnn_model_object),
+        upconvnet_model_object=upconvnet_model_object,
+        verbose=False
+    )
+
+    recon_predictor_matrix_denorm = normalization.denormalize_images(
+        predictor_matrix=recon_predictor_matrix_norm,
+        predictor_names=predictor_names,
+        normalization_dict=normalization_dict
+    )[0, ...]
+
+    temperature_index = predictor_names.index(utils.TEMPERATURE_NAME)
+    concat_temp_matrix_kelvins = numpy.concatenate((
+        orig_predictor_matrix_denorm[..., temperature_index],
+        recon_predictor_matrix_denorm[..., temperature_index]
+    ), axis=0)
+
+    min_temp_kelvins = numpy.percentile(concat_temp_matrix_kelvins, 1)
+    max_temp_kelvins = numpy.percentile(concat_temp_matrix_kelvins, 99)
+
+    _, axes_object_matrix = plotting.plot_many_predictors_with_barbs(
+        predictor_matrix=orig_predictor_matrix_denorm,
+        predictor_names=predictor_names,
+        min_colour_temp_kelvins=min_temp_kelvins,
+        max_colour_temp_kelvins=max_temp_kelvins
+    )
+
+    for i in range(axes_object_matrix.shape[0]):
+        for j in range(axes_object_matrix.shape[1]):
+            axes_object_matrix[i, j].set_title('Original image')
+
+    _, axes_object_matrix = plotting.plot_many_predictors_with_barbs(
+        predictor_matrix=recon_predictor_matrix_denorm,
+        predictor_names=predictor_names,
+        min_colour_temp_kelvins=min_temp_kelvins,
+        max_colour_temp_kelvins=max_temp_kelvins
+    )
+
+    for i in range(axes_object_matrix.shape[0]):
+        for j in range(axes_object_matrix.shape[1]):
+            axes_object_matrix[i, j].set_title('Upconvnet reconstruction')
+
+
+def __upconvnet_example2(cnn_model_object, upconvnet_model_object,
+                         validation_image_dict, normalization_dict):
+    """Applies upconvnet to example with strongest future rotation.
+
+    :param cnn_model_object: See doc for `__upconvnet_example1`.
+    :param upconvnet_model_object: Same.
+    :param validation_image_dict: Same.
+    :param normalization_dict: Same.
+    """
+
+    target_matrix_s01 = validation_image_dict[utils.TARGET_MATRIX_KEY]
+    example_index = numpy.unravel_index(
+        numpy.argmax(target_matrix_s01), target_matrix_s01.shape
+    )[0]
+
+    orig_predictor_matrix_denorm = (
+        validation_image_dict[utils.PREDICTOR_MATRIX_KEY][example_index, ...]
+        + 0.
+    )
+    predictor_names = validation_image_dict[utils.PREDICTOR_NAMES_KEY]
+
+    orig_predictor_matrix_norm, _ = normalization.normalize_images(
+        predictor_matrix=orig_predictor_matrix_denorm + 0.,
+        predictor_names=predictor_names,
+        normalization_dict=normalization_dict
+    )
+    orig_predictor_matrix_norm = numpy.expand_dims(
+        orig_predictor_matrix_norm, axis=0
+    )
+
+    recon_predictor_matrix_norm = cnn.apply_upconvnet(
+        cnn_model_object=cnn_model_object,
+        predictor_matrix=orig_predictor_matrix_norm,
+        cnn_feature_layer_name=cnn.get_flattening_layer(cnn_model_object),
+        upconvnet_model_object=upconvnet_model_object,
+        verbose=False
+    )
+
+    recon_predictor_matrix_denorm = normalization.denormalize_images(
+        predictor_matrix=recon_predictor_matrix_norm,
+        predictor_names=predictor_names,
+        normalization_dict=normalization_dict
+    )[0, ...]
+
+    temperature_index = predictor_names.index(utils.TEMPERATURE_NAME)
+    concat_temp_matrix_kelvins = numpy.concatenate((
+        orig_predictor_matrix_denorm[..., temperature_index],
+        recon_predictor_matrix_denorm[..., temperature_index]
+    ), axis=0)
+
+    min_temp_kelvins = numpy.percentile(concat_temp_matrix_kelvins, 1)
+    max_temp_kelvins = numpy.percentile(concat_temp_matrix_kelvins, 99)
+
+    _, axes_object_matrix = plotting.plot_many_predictors_with_barbs(
+        predictor_matrix=orig_predictor_matrix_denorm,
+        predictor_names=predictor_names,
+        min_colour_temp_kelvins=min_temp_kelvins,
+        max_colour_temp_kelvins=max_temp_kelvins
+    )
+
+    for i in range(axes_object_matrix.shape[0]):
+        for j in range(axes_object_matrix.shape[1]):
+            axes_object_matrix[i, j].set_title('Original image')
+
+    _, axes_object_matrix = plotting.plot_many_predictors_with_barbs(
+        predictor_matrix=recon_predictor_matrix_denorm,
+        predictor_names=predictor_names,
+        min_colour_temp_kelvins=min_temp_kelvins,
+        max_colour_temp_kelvins=max_temp_kelvins
+    )
+
+    for i in range(axes_object_matrix.shape[0]):
+        for j in range(axes_object_matrix.shape[1]):
+            axes_object_matrix[i, j].set_title('Upconvnet reconstruction')
+
+
+def __novelty_detection_example(
+        cnn_model_object, upconvnet_model_object, validation_image_dict,
+        normalization_dict):
+    """Runs novelty detection.
+
+    :param cnn_model_object: See doc for `__upconvnet_example1`.
+    :param upconvnet_model_object: Same.
+    :param validation_image_dict: Same.
+    :param normalization_dict: Same.
+    """
+
+    target_matrix_s_01 = validation_image_dict[utils.TARGET_MATRIX_KEY]
+    max_target_values_s01 = numpy.max(target_matrix_s_01, axis=(1, 2))
+
+    trial_indices = numpy.argsort(-1 * max_target_values_s01)[:100]
+    trial_indices = trial_indices[trial_indices >= 100]
+    baseline_indices = numpy.linspace(0, 100, num=100, dtype=int)
+
+    baseline_predictor_matrix_denorm = (
+        validation_image_dict[utils.PREDICTOR_MATRIX_KEY][baseline_indices, ...]
+        + 0.
+    )
+    trial_predictor_matrix_denorm = (
+        validation_image_dict[utils.PREDICTOR_MATRIX_KEY][trial_indices, ...]
+        + 0.
+    )
+    predictor_names = validation_image_dict[utils.PREDICTOR_NAMES_KEY]
+
+    baseline_predictor_matrix_norm, _ = normalization.normalize_images(
+        predictor_matrix=baseline_predictor_matrix_denorm + 0.,
+        predictor_names=predictor_names,
+        normalization_dict=normalization_dict
+    )
+    trial_predictor_matrix_norm, _ = normalization.normalize_images(
+        predictor_matrix=trial_predictor_matrix_denorm + 0.,
+        predictor_names=predictor_names,
+        normalization_dict=normalization_dict
+    )
+
+    novelty_dict = novelty_detection.run_novelty_detection(
+        baseline_predictor_matrix_norm=baseline_predictor_matrix_norm,
+        trial_predictor_matrix_norm=trial_predictor_matrix_norm,
+        cnn_model_object=cnn_model_object,
+        cnn_feature_layer_name=cnn.get_flattening_layer(cnn_model_object),
+        upconvnet_model_object=upconvnet_model_object,
+        num_novel_examples=4, multipass=False
+    )
+
+    novelty_dict[novelty_detection.NOVEL_MATRIX_KEY] = (
+        normalization.denormalize_images(
+            predictor_matrix=novelty_dict[novelty_detection.NOVEL_MATRIX_KEY],
+            predictor_names=predictor_names,
+            normalization_dict=normalization_dict
+        )
+    )
+
+    novelty_dict[novelty_detection.NOVEL_MATRIX_UPCONV_KEY] = (
+        normalization.denormalize_images(
+            predictor_matrix=
+            novelty_dict[novelty_detection.NOVEL_MATRIX_UPCONV_KEY],
+            predictor_names=predictor_names,
+            normalization_dict=normalization_dict
+        )
+    )
+
+    novelty_dict[novelty_detection.NOVEL_MATRIX_UPCONV_SVD_KEY] = (
+        normalization.denormalize_images(
+            predictor_matrix=
+            novelty_dict[novelty_detection.NOVEL_MATRIX_UPCONV_SVD_KEY],
+            predictor_names=predictor_names,
+            normalization_dict=normalization_dict
+        )
+    )
+
+
+def __plot_novelty_detection1(validation_image_dict, novelty_dict):
+    """Plots most novel example.
+
+    :param validation_image_dict: See doc for `__upconvnet_example1`.
+    :param novelty_dict: Denormalized version of dictionary created by
+        `novelty_detection.run_novelty_detection`.
+    """
+
+    novelty_detection.plot_results(
+        novelty_dict_denorm=novelty_dict, plot_index=0,
+        predictor_names=validation_image_dict[utils.PREDICTOR_NAMES_KEY]
+    )
+
+
+def __plot_novelty_detection2(validation_image_dict, novelty_dict):
+    """Plots second-most novel example.
+
+    :param validation_image_dict: See doc for `__upconvnet_example1`.
+    :param novelty_dict: Denormalized version of dictionary created by
+        `novelty_detection.run_novelty_detection`.
+    """
+
+    novelty_detection.plot_results(
+        novelty_dict_denorm=novelty_dict, plot_index=1,
+        predictor_names=validation_image_dict[utils.PREDICTOR_NAMES_KEY]
+    )
+
+
+def __plot_novelty_detection3(validation_image_dict, novelty_dict):
+    """Plots third-most novel example.
+
+    :param validation_image_dict: See doc for `__upconvnet_example1`.
+    :param novelty_dict: Denormalized version of dictionary created by
+        `novelty_detection.run_novelty_detection`.
+    """
+
+    novelty_detection.plot_results(
+        novelty_dict_denorm=novelty_dict, plot_index=2,
+        predictor_names=validation_image_dict[utils.PREDICTOR_NAMES_KEY]
+    )
+
+
+def __plot_novelty_detection4(validation_image_dict, novelty_dict):
+    """Plots fourth-most novel example.
+
+    :param validation_image_dict: See doc for `__upconvnet_example1`.
+    :param novelty_dict: Denormalized version of dictionary created by
+        `novelty_detection.run_novelty_detection`.
+    """
+
+    novelty_detection.plot_results(
+        novelty_dict_denorm=novelty_dict, plot_index=3,
+        predictor_names=validation_image_dict[utils.PREDICTOR_NAMES_KEY]
+    )

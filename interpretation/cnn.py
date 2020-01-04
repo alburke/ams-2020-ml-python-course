@@ -417,6 +417,35 @@ def apply_upconvnet(
     return recon_predictor_matrix
 
 
+def get_flattening_layer(cnn_model_object):
+    """Finds flattening layer in CNN.
+
+    This method assumes that there is only one flattening layer.  If there are
+    several, this method will return the first (shallowest).
+
+    :param cnn_model_object: Instance of `keras.models.Model`.
+    :return: layer_name: Name of flattening layer.
+    :raises: TypeError: if flattening layer cannot be found.
+    """
+
+    layer_names = [lyr.name for lyr in cnn_model_object.layers]
+
+    flattening_flags = numpy.array(
+        ['flatten' in n for n in layer_names], dtype=bool
+    )
+    flattening_indices = numpy.where(flattening_flags)[0]
+
+    if len(flattening_indices) == 0:
+        error_string = (
+            'Cannot find flattening layer in model.  Layer names are listed '
+            'below.\n{0:s}'
+        ).format(str(layer_names))
+
+        raise TypeError(error_string)
+
+    return layer_names[flattening_indices[0]]
+
+
 def find_model_metafile(model_file_name, raise_error_if_missing=False):
     """Finds metafile for CNN.
 

@@ -8,7 +8,7 @@ EOF_MATRIX_KEY = 'eof_matrix'
 FEATURE_MEANS_KEY = 'feature_means'
 FEATURE_STDEVS_KEY = 'feature_standard_deviations'
 
-NOVEL_INDICES_KEY = 'novel_indices'
+NOVEL_MATRIX_KEY = 'novel_predictor_matrix'
 NOVEL_MATRIX_UPCONV_KEY = 'novel_matrix_upconv'
 NOVEL_MATRIX_UPCONV_SVD_KEY = 'novel_matrix_upconv_svd'
 
@@ -261,15 +261,14 @@ def run_novelty_detection(
     :param percent_variance_to_keep: Percentage of variance to keep in SVD
         (singular-value decomposition) from image space to feature space.
     :return: novelty_dict: Dictionary with the following keys.
-    novelty_dict['novel_indices']: length-Q numpy array with indices of novel
-        examples, where novel_indices[i] is the index of the [i]th-most novel
-        example.
+    novelty_dict['novel_predictor_matrix']: numpy array with most novel examples
+        in trial set.  The first axis has length Q.
     novelty_dict['novel_matrix_upconv']: numpy array with upconvnet
-        reconstructions of the most novel examples.  The first axis has length
-        Q.
+        reconstructions of the most novel examples.  Same dimensions as
+        `novel_predictor_matrix`.
     novelty_dict['novel_matrix_upconv_svd']: numpy array with upconvnet
         reconstructions of SVD reconstructions of the most novel examples.
-        Same dimensions as `novel_matrix_upconv`.
+        Same dimensions as `novel_predictor_matrix`.
     """
 
     multipass = bool(multipass)
@@ -299,12 +298,12 @@ def run_novelty_detection(
     novel_matrix_upconv = None
     novel_matrix_upconv_svd = None
 
-    for i in range(num_novel_examples):
+    for k in range(num_novel_examples):
         print('Finding {0:d}th-most novel trial example...'.format(
-            i + 1, num_novel_examples
+            k + 1, num_novel_examples
         ))
 
-        fit_new_svd = multipass or i == 0
+        fit_new_svd = multipass or k == 0
 
         if fit_new_svd:
             this_baseline_feature_matrix = numpy.concatenate((
@@ -330,6 +329,8 @@ def run_novelty_detection(
         for i in range(num_trial_examples):
             if i in novel_indices:
                 continue
+
+            print(i)
 
             trial_feature_matrix_svd[i, ...] = _apply_svd(
                 feature_vector=trial_feature_matrix[i, ...],
@@ -361,45 +362,37 @@ def run_novelty_detection(
             novel_matrix_upconv = numpy.full(these_dim, numpy.nan)
             novel_matrix_upconv_svd = numpy.full(these_dim, numpy.nan)
 
-        novel_matrix_upconv[i, ...] = this_image_matrix_upconv
-        novel_matrix_upconv_svd[i, ...] = this_image_matrix_upconv_svd
+        novel_matrix_upconv[k, ...] = this_image_matrix_upconv
+        novel_matrix_upconv_svd[k, ...] = this_image_matrix_upconv_svd
 
     return {
-        NOVEL_INDICES_KEY: novel_indices,
+        NOVEL_MATRIX_KEY: trial_predictor_matrix_norm[novel_indices, ...],
         NOVEL_MATRIX_UPCONV_KEY: novel_matrix_upconv,
         NOVEL_MATRIX_UPCONV_SVD_KEY: novel_matrix_upconv_svd
     }
 
 
-def plot_results(trial_predictor_matrix_denorm, predictor_names,
-                 novelty_dict_denorm, novel_index):
+def plot_results(novelty_dict_denorm, plot_index, predictor_names):
     """Plots results of novelty detection.
 
-    T = number of trial examples
-    M = number of rows in grid
-    N = number of columns in grid
-    C = number of predictors
-
-    :param trial_predictor_matrix_denorm: T-by-M-by-N-by-C numpy array with
-        denormalized predictor values.
-    :param predictor_names: length-C list of predictor names.
     :param novelty_dict_denorm: Dictionary created by `run_novelty_detection`,
         except with denormalized predictor values.
-    :param novel_index: Will plot the [k]th most novel trial example, where k is
-        this arg.
+    :param plot_index: Will plot the [k]th most novel trial example, where
+        k = `plot_index`.
+    :param predictor_names: 1-D list of predictor names.
     """
 
     temperature_index = predictor_names.index(utils.TEMPERATURE_NAME)
     reflectivity_index = predictor_names.index(utils.REFLECTIVITY_NAME)
 
-    trial_index = novelty_dict_denorm[NOVEL_INDICES_KEY][novel_index]
-    actual_predictor_matrix = trial_predictor_matrix_denorm[trial_index, ...]
-
+    actual_predictor_matrix = (
+        novelty_dict_denorm[NOVEL_MATRIX_KEY][plot_index, ...]
+    )
     predictor_matrix_upconv = (
-        novelty_dict_denorm[NOVEL_MATRIX_UPCONV_KEY][novel_index, ...]
+        novelty_dict_denorm[NOVEL_MATRIX_UPCONV_KEY][plot_index, ...]
     )
     predictor_matrix_upconv_svd = (
-        novelty_dict_denorm[NOVEL_MATRIX_UPCONV_SVD_KEY][novel_index, ...]
+        novelty_dict_denorm[NOVEL_MATRIX_UPCONV_SVD_KEY][plot_index, ...]
     )
     novelty_matrix = predictor_matrix_upconv - predictor_matrix_upconv_svd
 
@@ -411,23 +404,27 @@ def plot_results(trial_predictor_matrix_denorm, predictor_names,
     min_colour_temp_kelvins = numpy.percentile(concat_temp_matrix_kelvins, 1)
     max_colour_temp_kelvins = numpy.percentile(concat_temp_matrix_kelvins, 99)
 
-    figure_object, _ = plotting.plot_many_predictors_with_barbs(
+    _, axes_object_matrix = plotting.plot_many_predictors_with_barbs(
         predictor_matrix=actual_predictor_matrix,
         predictor_names=predictor_names,
         min_colour_temp_kelvins=min_colour_temp_kelvins,
         max_colour_temp_kelvins=max_colour_temp_kelvins
     )
 
-    figure_object.suptitle('Actual example')
+    for i in range(axes_object_matrix.shape[0]):
+        for j in range(axes_object_matrix.shape[1]):
+            axes_object_matrix[i, j].set_title('Actual example')
 
-    figure_object, _ = plotting.plot_many_predictors_with_barbs(
+    _, axes_object_matrix = plotting.plot_many_predictors_with_barbs(
         predictor_matrix=predictor_matrix_upconv,
         predictor_names=predictor_names,
         min_colour_temp_kelvins=min_colour_temp_kelvins,
         max_colour_temp_kelvins=max_colour_temp_kelvins
     )
 
-    figure_object.suptitle('Upconvnet reconstruction')
+    for i in range(axes_object_matrix.shape[0]):
+        for j in range(axes_object_matrix.shape[1]):
+            axes_object_matrix[i, j].set_title('Upconvnet reconstruction')
 
     max_temp_diff_kelvins = numpy.percentile(
         numpy.absolute(novelty_matrix[..., temperature_index]), 99
@@ -436,7 +433,7 @@ def plot_results(trial_predictor_matrix_denorm, predictor_names,
         numpy.absolute(novelty_matrix[..., reflectivity_index]), 99
     )
 
-    figure_object, _ = _plot_novelty_maps(
+    _, axes_object_matrix = _plot_novelty_maps(
         novelty_matrix=novelty_matrix, predictor_names=predictor_names,
         max_temp_diff_kelvins=max_temp_diff_kelvins,
         max_reflectivity_diff_dbz=max_reflectivity_diff_dbz
@@ -446,4 +443,7 @@ def plot_results(trial_predictor_matrix_denorm, predictor_names,
         'Novelty (full upconvnet reconstruction minus upconvnet\n'
         'reconstruction from baseline examples'' feature space)'
     )
-    figure_object.suptitle(title_string, fontsize=12)
+
+    for i in range(axes_object_matrix.shape[0]):
+        for j in range(axes_object_matrix.shape[1]):
+            axes_object_matrix[i, j].set_title(title_string, fontsize=12)
