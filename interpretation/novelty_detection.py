@@ -439,11 +439,7 @@ def plot_results(novelty_dict_denorm, plot_index, predictor_names):
         max_reflectivity_diff_dbz=max_reflectivity_diff_dbz
     )
 
-    title_string = (
-        'Novelty (full upconvnet reconstruction minus upconvnet\n'
-        'reconstruction from baseline examples'' feature space)'
-    )
-
+    title_string = 'Novelty (unexpected part)'
     for i in range(axes_object_matrix.shape[0]):
         for j in range(axes_object_matrix.shape[1]):
-            axes_object_matrix[i, j].set_title(title_string, fontsize=12)
+            axes_object_matrix[i, j].set_title(title_string)
