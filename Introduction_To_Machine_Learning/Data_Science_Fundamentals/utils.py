@@ -19,9 +19,9 @@ import sys
 from os.path import dirname, abspath
 sys.path.insert(1, abspath('')+"/introduction_to_machine_learning")
 
-import introduction_to_machine_learning.data_science_fundamentals.roc_curves as roc_curves
-import introduction_to_machine_learning.data_science_fundamentals.performance_diagrams as perf_diagrams
-import introduction_to_machine_learning.data_science_fundamentals.attributes_diagrams as attr_diagrams
+import Introduction_To_Machine_Learning.Data_Science_Fundamentals.roc_curves as roc_curves
+import Introduction_To_Machine_Learning.Data_Science_Fundamentals.performance_diagrams as perf_diagrams
+import Introduction_To_Machine_Learning.Data_Science_Fundamentals.attributes_diagrams as attr_diagrams
 
 # Directories.
 MODULE2_DIR_NAME = dirname(abspath(__file__))

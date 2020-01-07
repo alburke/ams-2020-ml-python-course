@@ -3,7 +3,7 @@
 import numpy
 import matplotlib.colors
 import matplotlib.pyplot as pyplot
-import introduction_to_machine_learning.data_science_fundamentals.performance_diagrams as performance_diagrams
+import Introduction_To_Machine_Learning.Data_Science_Fundamentals.performance_diagrams as performance_diagrams
 
 DEFAULT_LINE_COLOUR = numpy.array([228, 26, 28], dtype=float) / 255
 DEFAULT_LINE_WIDTH = 3

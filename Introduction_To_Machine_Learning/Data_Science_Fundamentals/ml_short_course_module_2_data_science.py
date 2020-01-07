@@ -4,7 +4,7 @@
 # ms-python.python added
 import os
 try:
-	os.chdir(os.path.join(os.getcwd(), 'introduction_to_machine_learning/data_science_fundamentals'))
+	os.chdir(os.path.join(os.getcwd(), 'Introduction_To_Machine_Learning/Data_Science_Fundamentals'))
 	print(os.getcwd())
 except:
 	pass
@@ -18,7 +18,7 @@ from IPython import get_ipython
 # 
 # **Please cite the notebook as follows:**
 # 
-# Avery, K., 2020: "Data science fundamentals: Python tutorial". https://github.com/alburke/ams-2020-ml-python-course/tree/master/Introduction_To_Machine_Learning/data_science_fundamentals
+# Avery, K., 2020: "Data science fundamentals: Python tutorial". https://github.com/alburke/ams-2020-ml-python-course/tree/master/Introduction_To_Machine_Learning/Data_Science_Fundamentals
 # %% [markdown]
 # ## References
 # 
@@ -76,14 +76,14 @@ from IPython import get_ipython
 get_ipython().run_line_magic('matplotlib', 'inline')
 import sys
 from os.path import dirname, abspath
-sys.path.insert(1, abspath('')+"/introduction_to_machine_learning")
+sys.path.insert(1, abspath('')+"/Introduction_To_Machine_Learning")
 
 import copy
 import warnings
 import pandas
 import numpy
 import matplotlib.pyplot as pyplot
-import data_science_fundamentals.utils as utils
+import Data_Science_Fundamentals.utils as utils
 
 warnings.filterwarnings('ignore')
 
