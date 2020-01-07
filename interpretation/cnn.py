@@ -175,7 +175,7 @@ def data_generator(image_file_names, num_examples_per_batch, normalization_dict,
             binarization_threshold=binarization_threshold
         )
 
-        print('Fraction of examples in positive class: {0:.4f}'.format(
+        print('Fraction of examples in positive class: {0:.4f}\n\n'.format(
             numpy.mean(target_values)
         ))
 
