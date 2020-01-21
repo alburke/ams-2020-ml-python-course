@@ -10,6 +10,18 @@ Machine Learning in Python for Environmental Science Problems AMS 2020 Short Cou
 * Karthik Kashinath, Lawrence Berkeley National Laboratory
 * Ryan Lagerquist, University of Oklahoma (ryan.lagerquist@ou.edu)
 
+## Modules
+### Introduction to Machine Learning
+1. Introduction to Machine Learning and AI
+2. Data Science Fundamentals
+3. Supervised Learning Algorithms
+4. Introduction to Deep Learning
+
+### Advanced Topics in Machine Learning
+1. Unsupervised Learning Overview
+2. Machine Learning Model Interpretation
+3. Physics-Aware Machine Learning
+
 ## Requirements
 The modules for this short course require Python 3.6 and the following Python libraries:
 * numpy

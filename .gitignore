@@ -12,6 +12,6 @@ dist/
 .idea/
 *.iml
 
-# Other garbage.
+# Other files
 Advanced_Topics_In_Machine_Learning/.ipynb_checkpoints/
 data/
