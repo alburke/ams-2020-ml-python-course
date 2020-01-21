@@ -1,2 +1,17 @@
-*.code-workspace
-/data
+# Byte-compiled, optimized, and DLL files.
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution and packaging.
+build/
+dist/
+*.egg-info/
+
+# IntelliJ things.
+.idea/
+*.iml
+
+# Other files
+Advanced_Topics_In_Machine_Learning/.ipynb_checkpoints/
+data/
