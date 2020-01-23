@@ -12,6 +12,9 @@ dist/
 .idea/
 *.iml
 
+# VSCode things
+*.code-workspace
+
 # Other files
 Advanced_Topics_In_Machine_Learning/.ipynb_checkpoints/
 data/
